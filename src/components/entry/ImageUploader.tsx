@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { ImagePlus, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { compressImage } from "@/lib/clientImage";
 
 export interface UploadedMedia {
   id: string;
@@ -25,14 +26,21 @@ export function ImageUploader({ value, onChange }: Props) {
     if (!files || files.length === 0) return;
     setUploading(true);
     const uploaded: UploadedMedia[] = [];
-    for (const file of Array.from(files)) {
+    for (const original of Array.from(files)) {
+      const file = await compressImage(original);
       const fd = new FormData();
       fd.append("file", file);
       fd.append("kind", "image");
       const res = await fetch("/api/upload", { method: "POST", body: fd });
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        toast.error(data.error ?? `Nie udało się przesłać ${file.name}`);
+        let errMsg: string;
+        if (res.status === 413) {
+          errMsg = `${original.name}: plik za duży (po kompresji ${(file.size / 1024 / 1024).toFixed(1)} MB).`;
+        } else {
+          const data = await res.json().catch(() => ({}));
+          errMsg = data.error ?? `Nie udało się przesłać ${original.name} (HTTP ${res.status}).`;
+        }
+        toast.error(errMsg);
         continue;
       }
       const data = await res.json();

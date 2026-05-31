@@ -28,7 +28,9 @@ export function AudioRecorder({ value, onChange }: Props) {
   async function start() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mr = new MediaRecorder(stream);
+      // 32 kbps Opus = ~240 KB / min — mieści się w limicie request body Vercela
+      // (4.5 MB) nawet dla długich notatek.
+      const mr = new MediaRecorder(stream, { audioBitsPerSecond: 32000 });
       mediaRecorderRef.current = mr;
       chunksRef.current = [];
       mr.ondataavailable = (e) => {
