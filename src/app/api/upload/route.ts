@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
-import path from "node:path";
-import fs from "node:fs";
 import { requireSession } from "@/lib/session-server";
-import { db, schema } from "@/db";
+import { db, schema, ensureSchema } from "@/db";
 import { newId } from "@/lib/ids";
+import { saveMedia } from "@/lib/storage";
 
 export const runtime = "nodejs";
 
@@ -72,33 +71,30 @@ export async function POST(req: Request) {
     );
   }
 
+  await ensureSchema();
+
   const id = newId();
   const ext = extFor(mime);
   const filename = `${id}.${ext}`;
-  const relDir = kind === "image" ? "uploads/images" : "uploads/audio";
-  const absDir = path.join(process.cwd(), "public", relDir);
-  fs.mkdirSync(absDir, { recursive: true });
-  const absPath = path.join(absDir, filename);
   const buf = Buffer.from(await file.arrayBuffer());
-  fs.writeFileSync(absPath, buf);
 
-  const publicPath = `/${relDir}/${filename}`;
+  const saved = await saveMedia({ kind, filename, buffer: buf, mime });
 
   await db.insert(schema.media).values({
     id,
     entryId: null,
     kind,
-    path: publicPath,
+    path: saved.path,
     mime,
-    size: file.size,
+    size: saved.size,
     createdAt: new Date(),
   });
 
   return NextResponse.json({
     id,
-    path: publicPath,
+    path: saved.path,
     mime,
-    size: file.size,
+    size: saved.size,
     kind,
   });
 }

@@ -1,8 +1,7 @@
-import { db, schema } from "@/db";
+import { db, schema, ensureSchema } from "@/db";
 import { eq, desc, inArray, like, and, gte, lte, sql } from "drizzle-orm";
 import { newId } from "@/lib/ids";
-import fs from "node:fs";
-import path from "node:path";
+import { deleteBlob } from "@/lib/storage";
 
 export interface EntryWithRelations {
   id: string;
@@ -26,6 +25,7 @@ function normalizeTag(name: string): string {
 }
 
 export async function ensureTags(names: string[]): Promise<{ id: string; name: string }[]> {
+  await ensureSchema();
   const cleaned = Array.from(
     new Set(names.map(normalizeTag).filter((n) => n.length > 0))
   );
@@ -53,6 +53,7 @@ export async function listEntries(opts?: {
   to?: Date;
   limit?: number;
 }): Promise<EntryWithRelations[]> {
+  await ensureSchema();
   const limit = opts?.limit ?? 100;
 
   const conditions = [];
@@ -138,6 +139,7 @@ export async function listEntries(opts?: {
 }
 
 export async function getEntry(id: string): Promise<EntryWithRelations | null> {
+  await ensureSchema();
   const row = await db
     .select()
     .from(schema.entries)
@@ -182,6 +184,7 @@ export async function createEntry(input: {
   tags: string[];
   mediaIds: string[];
 }): Promise<string> {
+  await ensureSchema();
   const id = newId();
   const now = new Date();
 
@@ -222,6 +225,7 @@ export async function updateEntry(
     mediaIds: string[];
   }
 ): Promise<void> {
+  await ensureSchema();
   const existing = await db
     .select()
     .from(schema.entries)
@@ -256,10 +260,7 @@ export async function updateEntry(
   const keep = new Set(input.mediaIds);
   const toDelete = currentMedia.filter((m) => !keep.has(m.id));
   for (const m of toDelete) {
-    const full = path.join(process.cwd(), "public", m.path.replace(/^\//, ""));
-    try {
-      if (fs.existsSync(full)) fs.unlinkSync(full);
-    } catch {}
+    await deleteBlob(m.path);
   }
   if (toDelete.length > 0) {
     await db
@@ -280,20 +281,19 @@ export async function updateEntry(
 }
 
 export async function deleteEntry(id: string): Promise<void> {
+  await ensureSchema();
   const mediaRows = await db
     .select()
     .from(schema.media)
     .where(eq(schema.media.entryId, id));
   for (const m of mediaRows) {
-    const full = path.join(process.cwd(), "public", m.path.replace(/^\//, ""));
-    try {
-      if (fs.existsSync(full)) fs.unlinkSync(full);
-    } catch {}
+    await deleteBlob(m.path);
   }
   await db.delete(schema.entries).where(eq(schema.entries.id, id));
 }
 
 export async function listAllTagsWithCount(): Promise<{ name: string; count: number }[]> {
+  await ensureSchema();
   const rows = await db
     .select({
       name: schema.tags.name,
