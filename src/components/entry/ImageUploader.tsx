@@ -4,10 +4,12 @@ import { useRef, useState } from "react";
 import { ImagePlus, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { compressImage } from "@/lib/clientImage";
+import { blobToDataUrl } from "@/lib/clientMedia";
+import { newId } from "@/lib/db-client";
 
 export interface UploadedMedia {
   id: string;
-  path: string;
+  path: string; // data: URI
   mime: string;
   size: number;
   kind: "image" | "audio";
@@ -22,31 +24,27 @@ export function ImageUploader({ value, onChange }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
 
-  async function uploadFiles(files: FileList | null) {
+  async function handleFiles(files: FileList | null) {
     if (!files || files.length === 0) return;
     setUploading(true);
-    const uploaded: UploadedMedia[] = [];
+    const added: UploadedMedia[] = [];
     for (const original of Array.from(files)) {
-      const file = await compressImage(original);
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("kind", "image");
-      const res = await fetch("/api/upload", { method: "POST", body: fd });
-      if (!res.ok) {
-        let errMsg: string;
-        if (res.status === 413) {
-          errMsg = `${original.name}: plik za duży (po kompresji ${(file.size / 1024 / 1024).toFixed(1)} MB).`;
-        } else {
-          const data = await res.json().catch(() => ({}));
-          errMsg = data.error ?? `Nie udało się przesłać ${original.name} (HTTP ${res.status}).`;
-        }
-        toast.error(errMsg);
-        continue;
+      try {
+        const compressed = await compressImage(original);
+        const dataUrl = await blobToDataUrl(compressed);
+        added.push({
+          id: newId(),
+          path: dataUrl,
+          mime: compressed.type || "image/jpeg",
+          size: compressed.size,
+          kind: "image",
+        });
+      } catch (e) {
+        console.error(e);
+        toast.error(`Nie udało się dodać ${original.name}.`);
       }
-      const data = await res.json();
-      uploaded.push(data);
     }
-    onChange([...value, ...uploaded]);
+    onChange([...value, ...added]);
     setUploading(false);
     if (inputRef.current) inputRef.current.value = "";
   }
@@ -85,7 +83,7 @@ export function ImageUploader({ value, onChange }: Props) {
         className="inline-flex items-center gap-2 px-3 h-11 rounded-md border border-border hover:bg-foreground/5 text-sm w-fit"
       >
         {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
-        {uploading ? "Przesyłam…" : "Dodaj zdjęcia"}
+        {uploading ? "Przetwarzam…" : "Dodaj zdjęcia"}
       </button>
       <input
         ref={inputRef}
@@ -93,7 +91,7 @@ export function ImageUploader({ value, onChange }: Props) {
         accept="image/*"
         multiple
         className="hidden"
-        onChange={(e) => uploadFiles(e.target.files)}
+        onChange={(e) => handleFiles(e.target.files)}
       />
     </div>
   );

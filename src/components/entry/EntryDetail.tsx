@@ -18,6 +18,7 @@ import { parseMoods } from "@/lib/moods";
 import { formatWithWeekdayPL, formatTimePL } from "@/lib/dates";
 import { EntryForm } from "./EntryForm";
 import type { UploadedMedia } from "./ImageUploader";
+import { deleteEntry as dbDeleteEntry } from "@/lib/db-client";
 
 interface Props {
   entry: {
@@ -28,9 +29,10 @@ interface Props {
     tags: { id: string; name: string }[];
     media: UploadedMedia[];
   };
+  onChanged?: () => void;
 }
 
-export function EntryDetail({ entry }: Props) {
+export function EntryDetail({ entry, onChanged }: Props) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -38,15 +40,15 @@ export function EntryDetail({ entry }: Props) {
 
   async function onDelete() {
     setDeleting(true);
-    const res = await fetch(`/api/entries/${entry.id}`, { method: "DELETE" });
-    if (!res.ok) {
+    try {
+      await dbDeleteEntry(entry.id);
+      toast.success("Wpis usunięty.");
+      router.push("/historia");
+    } catch (e) {
+      console.error(e);
       toast.error("Nie udało się usunąć.");
       setDeleting(false);
-      return;
     }
-    toast.success("Wpis usunięty.");
-    router.push("/historia");
-    router.refresh();
   }
 
   if (editing) {
@@ -63,7 +65,7 @@ export function EntryDetail({ entry }: Props) {
         }}
         onSaved={() => {
           setEditing(false);
-          router.refresh();
+          onChanged?.();
         }}
         onCancel={() => setEditing(false)}
       />

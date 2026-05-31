@@ -3,6 +3,8 @@
 import { useRef, useState } from "react";
 import { Mic, Square, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { blobToDataUrl } from "@/lib/clientMedia";
+import { newId } from "@/lib/db-client";
 import type { UploadedMedia } from "./ImageUploader";
 
 interface Props {
@@ -19,7 +21,7 @@ function formatSeconds(s: number): string {
 export function AudioRecorder({ value, onChange }: Props) {
   const [recording, setRecording] = useState(false);
   const [elapsed, setElapsed] = useState(0);
-  const [uploading, setUploading] = useState(false);
+  const [processing, setProcessing] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<number | null>(null);
@@ -28,8 +30,6 @@ export function AudioRecorder({ value, onChange }: Props) {
   async function start() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      // 32 kbps Opus = ~240 KB / min — mieści się w limicie request body Vercela
-      // (4.5 MB) nawet dla długich notatek.
       const mr = new MediaRecorder(stream, { audioBitsPerSecond: 32000 });
       mediaRecorderRef.current = mr;
       chunksRef.current = [];
@@ -41,7 +41,7 @@ export function AudioRecorder({ value, onChange }: Props) {
         const blob = new Blob(chunksRef.current, {
           type: mr.mimeType || "audio/webm",
         });
-        await upload(blob);
+        await ingest(blob);
       };
       mr.start();
       startedAtRef.current = Date.now();
@@ -65,22 +65,27 @@ export function AudioRecorder({ value, onChange }: Props) {
     setRecording(false);
   }
 
-  async function upload(blob: Blob) {
-    setUploading(true);
-    const ext = blob.type.includes("ogg") ? "ogg" : "webm";
-    const fd = new FormData();
-    fd.append("file", new File([blob], `nagranie.${ext}`, { type: blob.type }));
-    fd.append("kind", "audio");
-    const res = await fetch("/api/upload", { method: "POST", body: fd });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      toast.error(data.error ?? "Nie udało się zapisać nagrania.");
-      setUploading(false);
-      return;
+  async function ingest(blob: Blob) {
+    setProcessing(true);
+    try {
+      const mime = (blob.type || "audio/webm").split(";")[0];
+      const dataUrl = await blobToDataUrl(blob);
+      onChange([
+        ...value,
+        {
+          id: newId(),
+          path: dataUrl,
+          mime,
+          size: blob.size,
+          kind: "audio",
+        },
+      ]);
+    } catch (e) {
+      console.error(e);
+      toast.error("Nie udało się zapisać nagrania.");
+    } finally {
+      setProcessing(false);
     }
-    const data = await res.json();
-    onChange([...value, data]);
-    setUploading(false);
   }
 
   return (
@@ -109,15 +114,15 @@ export function AudioRecorder({ value, onChange }: Props) {
         <button
           type="button"
           onClick={start}
-          disabled={uploading}
+          disabled={processing}
           className="inline-flex items-center gap-2 px-3 h-11 rounded-md border border-border hover:bg-foreground/5 text-sm w-fit"
         >
-          {uploading ? (
+          {processing ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
             <Mic className="h-4 w-4" />
           )}
-          {uploading ? "Zapisuję…" : "Nagraj notatkę"}
+          {processing ? "Zapisuję…" : "Nagraj notatkę"}
         </button>
       ) : (
         <button

@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MOOD_BY_KEY, serializeMoods, parseMoods } from "@/lib/moods";
+import { createEntry, updateEntry } from "@/lib/db-client";
 
 type PanelKey = "image" | "audio" | "mood" | "tags" | "date" | null;
 
@@ -70,42 +71,39 @@ export function EntryForm({ mode, initial, onSaved, onCancel }: Props) {
     }
     setSaving(true);
 
-    const payload = {
-      contentHtml: content,
-      mood: serializeMoods(moods),
-      createdAt: new Date(createdAt).toISOString(),
-      tags,
-      mediaIds: [...images, ...audio].map((m) => m.id),
-    };
-
-    const url = mode === "create" ? "/api/entries" : `/api/entries/${initial!.id}`;
-    const method = mode === "create" ? "POST" : "PATCH";
-    const res = await fetch(url, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      toast.error(data.error ?? "Nie udało się zapisać.");
+    try {
+      const allMedia = [...images, ...audio];
+      if (mode === "create") {
+        const id = await createEntry({
+          contentHtml: content,
+          mood: serializeMoods(moods),
+          createdAt: new Date(createdAt),
+          tags,
+          media: allMedia,
+        });
+        toast.success("Wpis zapisany.");
+        if (onSaved) {
+          onSaved(id);
+        } else {
+          router.push(`/wpis/${id}`);
+        }
+      } else {
+        await updateEntry(initial!.id, {
+          contentHtml: content,
+          mood: serializeMoods(moods),
+          createdAt: new Date(createdAt),
+          tags,
+          media: allMedia,
+        });
+        toast.success("Zaktualizowano.");
+        if (onSaved) onSaved(initial!.id);
+        else router.refresh();
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error(e instanceof Error ? e.message : "Nie udało się zapisać.");
+    } finally {
       setSaving(false);
-      return;
-    }
-
-    const data = await res.json().catch(() => ({}));
-    toast.success(mode === "create" ? "Wpis zapisany." : "Zaktualizowano.");
-    setSaving(false);
-
-    if (onSaved) {
-      onSaved(mode === "create" ? data.id : initial!.id);
-      return;
-    }
-
-    if (mode === "create") {
-      router.push(`/wpis/${data.id}`);
-    } else {
-      router.refresh();
     }
   }
 

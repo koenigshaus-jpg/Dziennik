@@ -1,33 +1,75 @@
+"use client";
+
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
-import { listEntries, listAllTagsWithCount } from "@/lib/entries";
+import {
+  listEntries,
+  listAllTagsWithCount,
+  type ClientEntry,
+} from "@/lib/db-client";
 import { formatLongPL, formatTimePL } from "@/lib/dates";
 import { snippet } from "@/lib/text";
 import { parseMoods } from "@/lib/moods";
 import { Image as ImageIcon, Mic, Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
-interface SearchParams {
-  q?: string;
-  tag?: string;
+export default function HistoryPage() {
+  return (
+    <Suspense fallback={<AppShell><p className="text-muted">Wczytuję…</p></AppShell>}>
+      <HistoryPageInner />
+    </Suspense>
+  );
 }
 
-export default async function HistoryPage({
-  searchParams,
-}: {
-  searchParams: Promise<SearchParams>;
-}) {
-  const params = await searchParams;
-  const q = params.q?.trim() || undefined;
-  const tag = params.tag || undefined;
+function HistoryPageInner() {
+  const router = useRouter();
+  const params = useSearchParams();
+  const q = params.get("q")?.trim() || "";
+  const tag = params.get("tag") || "";
 
-  const [entries, allTags] = await Promise.all([
-    listEntries({ q, tag }),
-    listAllTagsWithCount(),
-  ]);
+  const [entries, setEntries] = useState<ClientEntry[] | null>(null);
+  const [allTags, setAllTags] = useState<{ name: string; count: number }[]>([]);
+  const [searchDraft, setSearchDraft] = useState(q);
 
-  const topTags = allTags.filter((t) => t.count > 0).slice(0, 12);
-  const hasFilters = Boolean(q || tag);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [es, ts] = await Promise.all([
+          listEntries({ q: q || undefined, tag: tag || undefined }),
+          listAllTagsWithCount(),
+        ]);
+        if (!cancelled) {
+          setEntries(es);
+          setAllTags(ts);
+        }
+      } catch (e) {
+        console.error(e);
+        if (!cancelled) setEntries([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [q, tag]);
+
+  function submitSearch(e: React.FormEvent) {
+    e.preventDefault();
+    const sp = new URLSearchParams();
+    if (searchDraft) sp.set("q", searchDraft);
+    if (tag) sp.set("tag", tag);
+    router.push(`/historia${sp.toString() ? `?${sp}` : ""}`);
+  }
+
+  const topTags = useMemo(
+    () => allTags.filter((t) => t.count > 0).slice(0, 12),
+    [allTags]
+  );
+  const hasFilters = !!(q || tag);
+  const count = entries?.length ?? 0;
+  const loading = entries === null;
 
   return (
     <AppShell>
@@ -36,27 +78,28 @@ export default async function HistoryPage({
           Historia
         </h1>
         <p className="text-muted mt-2">
-          {entries.length === 0 && !hasFilters
+          {loading
+            ? "Wczytuję…"
+            : count === 0 && !hasFilters
             ? "Jeszcze nic tu nie ma. Napisz pierwszy wpis."
-            : `${entries.length} ${
-                entries.length === 1
+            : `${count} ${
+                count === 1
                   ? "wpis"
-                  : entries.length >= 2 && entries.length <= 4
+                  : count >= 2 && count <= 4
                   ? "wpisy"
                   : "wpisów"
               }`}
         </p>
       </header>
 
-      <form action="/historia" method="get" className="mb-4 relative">
+      <form onSubmit={submitSearch} className="mb-4 relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
         <Input
-          name="q"
-          defaultValue={q ?? ""}
+          value={searchDraft}
+          onChange={(e) => setSearchDraft(e.target.value)}
           placeholder="Szukaj w treści…"
           className="pl-10"
         />
-        {tag && <input type="hidden" name="tag" value={tag} />}
       </form>
 
       {topTags.length > 0 && (
@@ -73,7 +116,10 @@ export default async function HistoryPage({
             topTags.map((t) => (
               <Link
                 key={t.name}
-                href={{ pathname: "/historia", query: { ...(q ? { q } : {}), tag: t.name } }}
+                href={{
+                  pathname: "/historia",
+                  query: { ...(q ? { q } : {}), tag: t.name },
+                }}
                 className="inline-flex items-center gap-1 rounded-full bg-foreground/5 hover:bg-foreground/10 px-3 py-1 text-sm"
               >
                 #{t.name}
@@ -83,13 +129,15 @@ export default async function HistoryPage({
         </div>
       )}
 
-      {entries.length === 0 ? (
+      {loading ? (
+        <div className="py-16 text-center text-muted">Wczytuję wpisy…</div>
+      ) : count === 0 ? (
         <div className="py-16 text-center text-muted">
           {hasFilters ? "Brak wpisów pasujących do filtra." : null}
         </div>
       ) : (
         <ul className="flex flex-col divide-y divide-border border-y border-border">
-          {entries.map((e) => {
+          {entries!.map((e) => {
             const date = new Date(e.createdAt);
             const moods = parseMoods(e.mood);
             const hasImages = e.media.some((m) => m.kind === "image");
@@ -117,7 +165,9 @@ export default async function HistoryPage({
                     {moods.length > 0 && (
                       <span className="inline-flex items-center gap-1">
                         {moods.map((m) => (
-                          <span key={m.key} title={m.label}>{m.emoji}</span>
+                          <span key={m.key} title={m.label}>
+                            {m.emoji}
+                          </span>
                         ))}
                       </span>
                     )}
@@ -133,8 +183,8 @@ export default async function HistoryPage({
                       </span>
                     )}
                     {e.tags.map((t) => (
-                      <span key={t.id} className="text-muted">
-                        #{t.name}
+                      <span key={t} className="text-muted">
+                        #{t}
                       </span>
                     ))}
                   </div>
