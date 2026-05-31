@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Pencil, Trash2 } from "lucide-react";
@@ -108,12 +107,11 @@ export function EntryDetail({ entry }: Props) {
               onClick={() => setLightbox(m.path)}
               className="relative aspect-square rounded-md overflow-hidden border border-border bg-foreground/5"
             >
-              <Image
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
                 src={m.path}
                 alt=""
-                fill
-                sizes="(max-width: 768px) 50vw, 250px"
-                className="object-cover"
+                className="absolute inset-0 w-full h-full object-cover"
               />
             </button>
           ))}

@@ -4,11 +4,13 @@ import path from "node:path";
 import fs from "node:fs";
 import * as schema from "./schema";
 
-// Wybór backendu:
-// - Produkcja (Vercel): TURSO_DATABASE_URL + TURSO_AUTH_TOKEN
-// - Lokalnie: plik SQLite w ./data/dziennik.db
+// Wybór backendu — w kolejności priorytetu:
+// 1. TURSO_DATABASE_URL (Turso w produkcji)
+// 2. /tmp/dziennik.db (Vercel bez konfiguracji — ephemeral)
+// 3. ./data/dziennik.db (lokalny dev)
 const tursoUrl = process.env.TURSO_DATABASE_URL;
 const tursoToken = process.env.TURSO_AUTH_TOKEN;
+const isVercel = !!process.env.VERCEL;
 
 let url: string;
 let authToken: string | undefined;
@@ -16,6 +18,10 @@ let authToken: string | undefined;
 if (tursoUrl) {
   url = tursoUrl;
   authToken = tursoToken;
+} else if (isVercel) {
+  // /tmp jest jedynym writable katalogiem w Vercel serverless.
+  // Plik znika przy cold start funkcji — to tryb demo.
+  url = "file:/tmp/dziennik.db";
 } else {
   const dbDir = path.join(process.cwd(), "data");
   if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
@@ -24,7 +30,8 @@ if (tursoUrl) {
 
 const client = createClient({ url, authToken });
 
-// Inicjalizacja schematu — uruchamiana lazy raz na proces.
+export const isDemoMode = !tursoUrl;
+
 const SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS entries (
     id TEXT PRIMARY KEY,

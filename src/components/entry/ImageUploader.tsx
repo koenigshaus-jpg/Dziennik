@@ -1,7 +1,6 @@
 "use client";
 
 import { useRef, useState } from "react";
-import Image from "next/image";
 import { ImagePlus, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -53,12 +52,11 @@ export function ImageUploader({ value, onChange }: Props) {
               key={m.id}
               className="relative aspect-square rounded-md overflow-hidden border border-border bg-foreground/5"
             >
-              <Image
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
                 src={m.path}
                 alt=""
-                fill
-                sizes="(max-width: 768px) 33vw, 200px"
-                className="object-cover"
+                className="absolute inset-0 w-full h-full object-cover"
               />
               <button
                 type="button"
