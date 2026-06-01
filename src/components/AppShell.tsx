@@ -20,7 +20,7 @@ export function AppShell({
       >
         {children}
       </div>
-      <BottomNav wide={wide} />
+      <BottomNav />
     </>
   );
 }
