@@ -271,21 +271,19 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
   }[] = [
     {
       key: "mood",
-      label: "Nastrój",
+      label: "Dodaj nastrój",
       icon: Smile,
-      badge: moods.length > 0
-        ? moods.map((k) => MOOD_BY_KEY[k]?.emoji).filter(Boolean).join("")
-        : null,
+      badge: null,
     },
     {
       key: "tags",
-      label: "Tagi",
+      label: "Dodaj tag",
       icon: Hash,
-      badge: tags.length > 0 ? String(tags.length) : null,
+      badge: null,
     },
     {
       key: "date",
-      label: "Data",
+      label: "Edytuj datę",
       icon: Calendar,
       badge:
         formatDateTimeLocalInput(new Date()).slice(0, 10) !== createdAt.slice(0, 10)
@@ -296,6 +294,9 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
 
   const imageBadge = images.length > 0 ? String(images.length) : null;
   const audioBadge = audio.length > 0 ? String(audio.length) : null;
+  const selectedMoods = moods
+    .map((k) => MOOD_BY_KEY[k])
+    .filter((m): m is NonNullable<typeof m> => !!m);
 
   const baseBtn =
     "inline-flex items-center gap-1.5 h-9 px-3 rounded-full border text-sm transition-colors";
@@ -368,6 +369,45 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
         )}
       </div>
 
+      {(images.length > 0 || audio.length > 0) && (
+        <div className="flex flex-col gap-3">
+          <MediaThumbs
+            value={images}
+            onRemove={(id) => setImages(images.filter((x) => x.id !== id))}
+          />
+          <AudioList
+            value={audio}
+            onRemove={(id) => setAudio(audio.filter((x) => x.id !== id))}
+          />
+        </div>
+      )}
+
+      {(selectedMoods.length > 0 || tags.length > 0) && (
+        <div className="flex flex-wrap gap-2">
+          {selectedMoods.map((m) => (
+            <button
+              key={m.key}
+              type="button"
+              onClick={() => togglePanel("mood")}
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-full border bg-foreground/5 border-foreground/20 text-sm hover:bg-foreground/10"
+            >
+              <span className="text-base leading-none">{m.emoji}</span>
+              <span>{m.label}</span>
+            </button>
+          ))}
+          {tags.map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => togglePanel("tags")}
+              className="inline-flex items-center h-9 px-3 rounded-full border border-foreground/20 text-sm text-muted hover:bg-foreground/5"
+            >
+              #{t}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className={cn("flex flex-wrap gap-2", bare ? "justify-start" : "justify-center")}>
         {/* Photos: one-click → file picker */}
         <button
@@ -381,7 +421,7 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
           ) : (
             <ImagePlus className="h-4 w-4" />
           )}
-          <span>Zdjęcia</span>
+          <span>Dodaj zdjęcie</span>
           {imageBadge && (
             <span className="ml-0.5 text-xs font-medium opacity-70">
               {imageBadge}
@@ -421,7 +461,7 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
           <span>
             {recording
               ? `Zatrzymaj (${formatSeconds(elapsed)})`
-              : "Audio"}
+              : "Dodaj audio"}
           </span>
           {!recording && audioBadge && (
             <span className="ml-0.5 text-xs font-medium opacity-70">
@@ -486,19 +526,6 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
           >
             <Check className="h-3.5 w-3.5" /> Gotowe
           </button>
-        </div>
-      )}
-
-      {(images.length > 0 || audio.length > 0) && (
-        <div className="flex flex-col gap-3">
-          <MediaThumbs
-            value={images}
-            onRemove={(id) => setImages(images.filter((x) => x.id !== id))}
-          />
-          <AudioList
-            value={audio}
-            onRemove={(id) => setAudio(audio.filter((x) => x.id !== id))}
-          />
         </div>
       )}
 

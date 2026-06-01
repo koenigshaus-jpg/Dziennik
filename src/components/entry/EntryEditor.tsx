@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -24,11 +24,22 @@ interface Props {
   bodyClassName?: string;
 }
 
+const AUTOSAVE_DELAY_MS = 800;
+
 export function EntryEditor({ entry, onUpdated, onDeleted, bodyClassName }: Props) {
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savedAt, setSavedAt] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
   const formRef = useRef<EntryFormHandle>(null);
+
+  useEffect(() => {
+    if (!dirty || saving) return;
+    const t = setTimeout(() => {
+      formRef.current?.save().catch(() => {});
+    }, AUTOSAVE_DELAY_MS);
+    return () => clearTimeout(t);
+  }, [dirty, saving]);
 
   async function handleDelete() {
     setDeleting(true);
@@ -44,6 +55,13 @@ export function EntryEditor({ entry, onUpdated, onDeleted, bodyClassName }: Prop
   }
 
   const date = new Date(entry.createdAt);
+  const status = saving
+    ? "Zapisywanie…"
+    : dirty
+    ? "Niezapisane zmiany"
+    : savedAt
+    ? "Zapisano"
+    : "";
 
   return (
     <div className="flex flex-col gap-5">
@@ -51,7 +69,13 @@ export function EntryEditor({ entry, onUpdated, onDeleted, bodyClassName }: Prop
         <p className="text-sm uppercase tracking-wider text-muted pt-2">
           {formatWithWeekdayPL(date)} · {formatTimePL(date)}
         </p>
-        <div className="flex items-center gap-16">
+        <div className="flex items-center gap-4">
+          <span
+            className="text-xs text-muted tabular-nums"
+            aria-live="polite"
+          >
+            {status}
+          </span>
           <Dialog>
             <DialogTrigger asChild>
               <button
@@ -84,51 +108,35 @@ export function EntryEditor({ entry, onUpdated, onDeleted, bodyClassName }: Prop
               </div>
             </DialogContent>
           </Dialog>
-          <Button
-            size="sm"
-            onClick={() => formRef.current?.save()}
-            disabled={!dirty || saving}
-            className="hidden lg:inline-flex"
-          >
-            {saving ? "Zapisuję…" : "Zapisz"}
-          </Button>
         </div>
       </div>
 
       <div className={bodyClassName}>
-      <EntryForm
-        ref={formRef}
-        key={entry.id}
-        mode="edit"
-        bare
-        initial={{
-          id: entry.id,
-          contentHtml: entry.contentHtml,
-          mood: entry.mood,
-          createdAt: new Date(entry.createdAt).toISOString(),
-          tags: entry.tags,
-          media: entry.media,
-        }}
-        onDirtyChange={setDirty}
-        onSavingChange={setSaving}
-        onSaved={async (id) => {
-          setDirty(false);
-          try {
-            const fresh = await getEntry(id);
-            if (fresh) onUpdated?.(fresh);
-          } catch {}
-        }}
-      />
+        <EntryForm
+          ref={formRef}
+          key={entry.id}
+          mode="edit"
+          bare
+          initial={{
+            id: entry.id,
+            contentHtml: entry.contentHtml,
+            mood: entry.mood,
+            createdAt: new Date(entry.createdAt).toISOString(),
+            tags: entry.tags,
+            media: entry.media,
+          }}
+          onDirtyChange={setDirty}
+          onSavingChange={setSaving}
+          onSaved={async (id) => {
+            setDirty(false);
+            setSavedAt(Date.now());
+            try {
+              const fresh = await getEntry(id);
+              if (fresh) onUpdated?.(fresh);
+            } catch {}
+          }}
+        />
       </div>
-
-      <Button
-        size="lg"
-        onClick={() => formRef.current?.save()}
-        disabled={!dirty || saving}
-        className="lg:hidden fixed bottom-20 right-4 z-30 shadow-lg"
-      >
-        {saving ? "Zapisuję…" : "Zapisz"}
-      </Button>
     </div>
   );
 }
