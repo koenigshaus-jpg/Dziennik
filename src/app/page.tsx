@@ -9,7 +9,7 @@ export default function HomePage() {
   return (
     <>
       <TopNav />
-      <div className="absolute top-3 right-4 z-20 text-[10px] uppercase tracking-[0.18em] text-muted/70 font-mono pointer-events-none select-none lg:hidden">
+      <div className="fixed bottom-[68px] right-4 lg:bottom-3 z-20 text-[10px] uppercase tracking-[0.18em] text-muted/70 font-mono pointer-events-none select-none">
         v{APP_VERSION}
       </div>
       <main className="flex-1 flex flex-col justify-center w-full mx-auto max-w-2xl lg:max-w-5xl px-5 sm:px-8 py-10">
