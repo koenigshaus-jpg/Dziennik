@@ -1,2 +1,2 @@
 // Wersja aplikacji — bumpowana przy każdym pushu na GitHuba.
-export const APP_VERSION = "0.04";
+export const APP_VERSION = "0.05";

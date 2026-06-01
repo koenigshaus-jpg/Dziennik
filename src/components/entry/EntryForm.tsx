@@ -44,6 +44,7 @@ interface Props {
   bare?: boolean;
   onDirtyChange?: (dirty: boolean) => void;
   onSavingChange?: (saving: boolean) => void;
+  actionsSlot?: React.ReactNode;
 }
 
 export interface EntryFormHandle {
@@ -57,7 +58,7 @@ function formatSeconds(s: number): string {
 }
 
 export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
-  { mode, initial, onSaved, onCancel, bare = false, onDirtyChange, onSavingChange },
+  { mode, initial, onSaved, onCancel, bare = false, onDirtyChange, onSavingChange, actionsSlot },
   ref
 ) {
   const router = useRouter();
@@ -305,7 +306,7 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
   const activeBtn = "bg-foreground text-background border-foreground";
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className={cn("flex flex-col gap-5", bare ? "pb-44 lg:pb-0" : "")}>
       <div
         onDragEnter={(e) => {
           if (!Array.from(e.dataTransfer.types).includes("Files")) return;
@@ -385,29 +386,33 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
       {(selectedMoods.length > 0 || tags.length > 0) && (
         <div className="flex flex-wrap gap-2">
           {selectedMoods.map((m) => (
-            <button
+            <span
               key={m.key}
-              type="button"
-              onClick={() => togglePanel("mood")}
-              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-full border bg-foreground/5 border-foreground/20 text-sm hover:bg-foreground/10"
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-full border bg-foreground/5 border-foreground/20 text-sm select-none"
             >
               <span className="text-base leading-none">{m.emoji}</span>
               <span>{m.label}</span>
-            </button>
+            </span>
           ))}
           {tags.map((t) => (
-            <button
+            <span
               key={t}
-              type="button"
-              onClick={() => togglePanel("tags")}
-              className="inline-flex items-center h-9 px-3 rounded-full border border-foreground/20 text-sm text-muted hover:bg-foreground/5"
+              className="inline-flex items-center h-9 px-3 rounded-full border border-foreground/20 text-sm text-muted select-none"
             >
               #{t}
-            </button>
+            </span>
           ))}
         </div>
       )}
 
+      <div
+        className={cn(
+          "flex flex-col gap-3",
+          bare
+            ? "lg:static lg:bg-transparent lg:border-0 lg:p-0 fixed bottom-14 left-0 right-0 z-30 bg-background border-t border-border px-4 pt-3 pb-4"
+            : ""
+        )}
+      >
       <div className={cn("flex flex-wrap gap-2", bare ? "justify-start" : "justify-center")}>
         {/* Photos: one-click → file picker */}
         <button
@@ -501,6 +506,8 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
             </button>
           );
         })}
+      </div>
+      {actionsSlot && <div className="lg:hidden">{actionsSlot}</div>}
       </div>
 
       {openPanel && (
