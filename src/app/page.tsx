@@ -1,4 +1,5 @@
 import { BottomNav } from "@/components/BottomNav";
+import { TopNav } from "@/components/TopNav";
 import { EntryForm } from "@/components/entry/EntryForm";
 import { formatWithWeekdayPL } from "@/lib/dates";
 import { APP_VERSION } from "@/lib/version";
@@ -7,11 +8,12 @@ export default function HomePage() {
   const today = new Date();
   return (
     <>
-      <div className="absolute top-3 right-4 z-20 text-[10px] uppercase tracking-[0.18em] text-muted/70 font-mono pointer-events-none select-none">
+      <TopNav />
+      <div className="absolute top-3 right-4 z-20 text-[10px] uppercase tracking-[0.18em] text-muted/70 font-mono pointer-events-none select-none lg:hidden">
         v{APP_VERSION}
       </div>
-      <main className="flex-1 flex flex-col justify-center w-full mx-auto max-w-2xl px-5 sm:px-8 py-10">
-        <div className="text-center mb-6">
+      <main className="flex-1 flex flex-col justify-center w-full mx-auto max-w-2xl lg:max-w-5xl px-5 sm:px-8 py-10">
+        <div className="text-center mb-6 lg:mb-[56px] -mt-16">
           <p className="text-xs uppercase tracking-[0.2em] text-muted">
             {formatWithWeekdayPL(today)}
           </p>

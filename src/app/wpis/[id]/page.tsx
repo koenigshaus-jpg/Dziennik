@@ -3,8 +3,8 @@
 import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
-import { EntryDetail } from "@/components/entry/EntryDetail";
-import { getEntry, type ClientEntry } from "@/lib/db-client";
+import { EntryEditor } from "@/components/entry/EntryEditor";
+import { getEntry, type ClientEntry, type EntriesChangedDetail } from "@/lib/db-client";
 
 export default function EntryPage({
   params,
@@ -14,7 +14,6 @@ export default function EntryPage({
   const { id } = use(params);
   const router = useRouter();
   const [entry, setEntry] = useState<ClientEntry | null | undefined>(undefined);
-  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -30,7 +29,17 @@ export default function EntryPage({
     return () => {
       cancelled = true;
     };
-  }, [id, reloadKey]);
+  }, [id]);
+
+  useEffect(() => {
+    function onChanged(e: Event) {
+      const detail = (e as CustomEvent<EntriesChangedDetail>).detail;
+      if (detail.id !== id) return;
+      if (detail.kind === "delete") setEntry(null);
+    }
+    window.addEventListener("entries-changed", onChanged);
+    return () => window.removeEventListener("entries-changed", onChanged);
+  }, [id]);
 
   if (entry === undefined) {
     return (
@@ -56,16 +65,10 @@ export default function EntryPage({
 
   return (
     <AppShell>
-      <EntryDetail
-        entry={{
-          id: entry.id,
-          contentHtml: entry.contentHtml,
-          mood: entry.mood,
-          createdAt: new Date(entry.createdAt).toISOString(),
-          tags: entry.tags.map((name) => ({ id: name, name })),
-          media: entry.media,
-        }}
-        onChanged={() => setReloadKey((k) => k + 1)}
+      <EntryEditor
+        entry={entry}
+        onUpdated={(fresh) => setEntry(fresh)}
+        onDeleted={() => router.push("/historia")}
       />
     </AppShell>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Editor } from "./Editor";
@@ -41,6 +41,13 @@ interface Props {
   };
   onSaved?: (id: string) => void;
   onCancel?: () => void;
+  bare?: boolean;
+  onDirtyChange?: (dirty: boolean) => void;
+  onSavingChange?: (saving: boolean) => void;
+}
+
+export interface EntryFormHandle {
+  save: () => Promise<void>;
 }
 
 function formatSeconds(s: number): string {
@@ -49,7 +56,10 @@ function formatSeconds(s: number): string {
   return `${m}:${sec.toString().padStart(2, "0")}`;
 }
 
-export function EntryForm({ mode, initial, onSaved, onCancel }: Props) {
+export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
+  { mode, initial, onSaved, onCancel, bare = false, onDirtyChange, onSavingChange },
+  ref
+) {
   const router = useRouter();
   const [content, setContent] = useState(initial?.contentHtml ?? "");
   const [moods, setMoods] = useState<string[]>(
@@ -73,6 +83,8 @@ export function EntryForm({ mode, initial, onSaved, onCancel }: Props) {
   // images
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const dragDepthRef = useRef(0);
 
   // audio
   const [recording, setRecording] = useState(false);
@@ -87,7 +99,7 @@ export function EntryForm({ mode, initial, onSaved, onCancel }: Props) {
     setOpenPanel((curr) => (curr === key ? null : key));
   }
 
-  async function handleImageFiles(files: FileList | null) {
+  async function handleImageFiles(files: FileList | File[] | null) {
     if (!files || files.length === 0) return;
     setUploadingImage(true);
     const added: UploadedMedia[] = [];
@@ -191,7 +203,10 @@ export function EntryForm({ mode, initial, onSaved, onCancel }: Props) {
         if (onSaved) {
           onSaved(id);
         } else {
-          router.push(`/wpis/${id}`);
+          const isDesktop =
+            typeof window !== "undefined" &&
+            window.matchMedia("(min-width: 1024px)").matches;
+          router.push(isDesktop ? `/historia?id=${id}` : `/wpis/${id}`);
         }
       } else {
         await updateEntry(initial!.id, {
@@ -212,6 +227,41 @@ export function EntryForm({ mode, initial, onSaved, onCancel }: Props) {
       setSaving(false);
     }
   }
+
+  useImperativeHandle(ref, () => ({ save }));
+
+  useEffect(() => {
+    onSavingChange?.(saving);
+  }, [saving, onSavingChange]);
+
+  useEffect(() => {
+    if (!onDirtyChange) return;
+    if (mode === "create") {
+      const isEmpty = !content || content.replace(/<[^>]+>/g, "").trim() === "";
+      onDirtyChange(!isEmpty);
+      return;
+    }
+    if (!initial) {
+      onDirtyChange(false);
+      return;
+    }
+    const initialMoods = parseMoods(initial.mood).map((m) => m.key);
+    const initialImages = initial.media.filter((m) => m.kind === "image");
+    const initialAudio = initial.media.filter((m) => m.kind === "audio");
+    const initialCreatedAt = formatDateTimeLocalInput(new Date(initial.createdAt));
+    const sameArr = (a: string[], b: string[]) =>
+      a.length === b.length && a.every((v, i) => v === b[i]);
+    const sameMediaIds = (a: UploadedMedia[], b: UploadedMedia[]) =>
+      a.length === b.length && a.every((m, i) => m.id === b[i].id);
+    const dirty =
+      content !== initial.contentHtml ||
+      !sameArr(moods, initialMoods) ||
+      !sameArr(tags, initial.tags) ||
+      !sameMediaIds(images, initialImages) ||
+      !sameMediaIds(audio, initialAudio) ||
+      createdAt !== initialCreatedAt;
+    onDirtyChange(dirty);
+  }, [content, moods, tags, images, audio, createdAt, mode, initial, onDirtyChange]);
 
   const panelTools: {
     key: NonNullable<PanelKey>;
@@ -255,15 +305,70 @@ export function EntryForm({ mode, initial, onSaved, onCancel }: Props) {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="rounded-2xl border border-border bg-background/60 px-6 py-7 sm:px-8 sm:py-8 min-h-[240px] shadow-[0_1px_0_rgba(0,0,0,0.02),0_8px_30px_-12px_rgba(0,0,0,0.08)]">
+      <div
+        onDragEnter={(e) => {
+          if (!Array.from(e.dataTransfer.types).includes("Files")) return;
+          e.preventDefault();
+          dragDepthRef.current += 1;
+          setDragOver(true);
+        }}
+        onDragOver={(e) => {
+          if (!Array.from(e.dataTransfer.types).includes("Files")) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "copy";
+        }}
+        onDragLeave={(e) => {
+          if (!Array.from(e.dataTransfer.types).includes("Files")) return;
+          dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+          if (dragDepthRef.current === 0) setDragOver(false);
+        }}
+        onDrop={(e) => {
+          if (!Array.from(e.dataTransfer.types).includes("Files")) return;
+          e.preventDefault();
+          dragDepthRef.current = 0;
+          setDragOver(false);
+          const imageFiles = Array.from(e.dataTransfer.files).filter((f) =>
+            f.type.startsWith("image/")
+          );
+          if (imageFiles.length === 0) {
+            toast.error("Upuść plik graficzny.");
+            return;
+          }
+          handleImageFiles(imageFiles);
+        }}
+        className={cn(
+          "relative transition-colors",
+          bare
+            ? cn(
+                "rounded-md min-h-[120px]",
+                dragOver
+                  ? "outline-2 outline-dashed outline-foreground/40 bg-foreground/[0.04]"
+                  : ""
+              )
+            : cn(
+                "rounded-2xl border bg-background/60 px-6 py-7 sm:px-8 sm:py-8 min-h-[224px] sm:min-h-[336px] lg:min-h-[416px] shadow-[0_1px_0_rgba(0,0,0,0.02),0_8px_30px_-12px_rgba(0,0,0,0.08)]",
+                dragOver
+                  ? "border-foreground/50 bg-foreground/[0.04]"
+                  : "border-border"
+              )
+        )}
+      >
         <Editor
           value={content}
           onChange={setContent}
           placeholder="Zacznij pisać…"
         />
+        {dragOver && (
+          <div className="pointer-events-none absolute inset-0 rounded-2xl border-2 border-dashed border-foreground/40 bg-background/70 flex items-center justify-center">
+            <div className="flex items-center gap-2 text-sm text-muted">
+              <ImagePlus className="h-4 w-4" />
+              Upuść zdjęcia, żeby dodać
+            </div>
+          </div>
+        )}
       </div>
 
-      <div className="flex flex-wrap justify-center gap-2">
+      <div className={cn("flex flex-wrap gap-2", bare ? "justify-start" : "justify-center")}>
         {/* Photos: one-click → file picker */}
         <button
           type="button"
@@ -358,19 +463,6 @@ export function EntryForm({ mode, initial, onSaved, onCancel }: Props) {
         })}
       </div>
 
-      {(images.length > 0 || audio.length > 0) && (
-        <div className="flex flex-col gap-3">
-          <MediaThumbs
-            value={images}
-            onRemove={(id) => setImages(images.filter((x) => x.id !== id))}
-          />
-          <AudioList
-            value={audio}
-            onRemove={(id) => setAudio(audio.filter((x) => x.id !== id))}
-          />
-        </div>
-      )}
-
       {openPanel && (
         <div className="border border-border rounded-xl p-4 bg-foreground/[0.02] animate-in fade-in slide-in-from-top-1 duration-150">
           {openPanel === "mood" && (
@@ -397,21 +489,41 @@ export function EntryForm({ mode, initial, onSaved, onCancel }: Props) {
         </div>
       )}
 
-      <div className="flex justify-center gap-3 pt-2">
-        <Button
-          size="lg"
-          onClick={save}
-          disabled={saving}
-          className="min-w-[200px]"
-        >
-          {saving ? "Zapisuję…" : mode === "create" ? "Zapisz wpis" : "Zapisz zmiany"}
-        </Button>
-        {onCancel && (
-          <Button size="lg" variant="outline" onClick={onCancel}>
-            Anuluj
+      {(images.length > 0 || audio.length > 0) && (
+        <div className="flex flex-col gap-3">
+          <MediaThumbs
+            value={images}
+            onRemove={(id) => setImages(images.filter((x) => x.id !== id))}
+          />
+          <AudioList
+            value={audio}
+            onRemove={(id) => setAudio(audio.filter((x) => x.id !== id))}
+          />
+        </div>
+      )}
+
+      {!bare && (
+        <div className="flex flex-col sm:flex-row sm:justify-center gap-3 pt-10">
+          <Button
+            size="lg"
+            onClick={save}
+            disabled={saving}
+            className="w-full sm:w-auto sm:min-w-[200px]"
+          >
+            {saving ? "Zapisuję…" : mode === "create" ? "Zapisz wpis" : "Zapisz zmiany"}
           </Button>
-        )}
-      </div>
+          {onCancel && (
+            <Button
+              size="lg"
+              variant="outline"
+              onClick={onCancel}
+              className="w-full sm:w-auto"
+            >
+              Anuluj
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
-}
+});

@@ -51,6 +51,17 @@ function reqToPromise<T>(r: IDBRequest<T>): Promise<T> {
   });
 }
 
+export type EntriesChangedKind = "create" | "update" | "delete";
+export interface EntriesChangedDetail {
+  id: string;
+  kind: EntriesChangedKind;
+}
+
+function emitChanged(detail: EntriesChangedDetail): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent("entries-changed", { detail }));
+}
+
 function newId(): string {
   // crypto.randomUUID dostępne w nowoczesnych przeglądarkach + Node
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -106,6 +117,7 @@ export async function createEntry(input: {
     t.onerror = () => reject(t.error);
     t.onabort = () => reject(t.error);
   });
+  emitChanged({ id, kind: "create" });
   return id;
 }
 
@@ -139,6 +151,7 @@ export async function updateEntry(
     t.onerror = () => reject(t.error);
     t.onabort = () => reject(t.error);
   });
+  emitChanged({ id, kind: "update" });
 }
 
 export async function deleteEntry(id: string): Promise<void> {
@@ -150,6 +163,7 @@ export async function deleteEntry(id: string): Promise<void> {
     t.onerror = () => reject(t.error);
     t.onabort = () => reject(t.error);
   });
+  emitChanged({ id, kind: "delete" });
 }
 
 export async function getEntry(id: string): Promise<ClientEntry | null> {

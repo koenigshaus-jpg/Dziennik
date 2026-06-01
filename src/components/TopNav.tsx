@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { PenLine, Book } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export function BottomNav() {
+export function TopNav() {
   const pathname = usePathname();
 
   const items = [
@@ -19,8 +19,8 @@ export function BottomNav() {
   ];
 
   return (
-    <nav className="sticky bottom-0 z-30 border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:hidden">
-      <div className="mx-auto max-w-2xl flex items-stretch justify-around">
+    <header className="hidden lg:flex sticky top-0 z-30 h-14 items-center justify-end px-6 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+      <nav className="flex items-stretch h-full -mb-px">
         {items.map((item) => {
           const Icon = item.icon;
           return (
@@ -28,16 +28,18 @@ export function BottomNav() {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex-1 flex flex-col items-center justify-center gap-1 py-3 text-xs",
-                item.active ? "text-foreground" : "text-muted"
+                "inline-flex items-center gap-2 h-full px-5 text-sm font-medium border-b-2 transition-colors",
+                item.active
+                  ? "text-foreground border-foreground"
+                  : "text-muted border-transparent hover:text-foreground hover:border-foreground/30"
               )}
             >
-              <Icon className="h-5 w-5" />
+              <Icon className="h-4 w-4" />
               <span>{item.label}</span>
             </Link>
           );
         })}
-      </div>
-    </nav>
+      </nav>
+    </header>
   );
 }
