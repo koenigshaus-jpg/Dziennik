@@ -20,6 +20,8 @@ import {
   Check,
   Square,
   Loader2,
+  Plus,
+  ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MOOD_BY_KEY, serializeMoods, parseMoods } from "@/lib/moods";
@@ -80,6 +82,7 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
   );
   const [openPanel, setOpenPanel] = useState<PanelKey>(null);
   const [saving, setSaving] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(false);
 
   // images
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -413,7 +416,31 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
             : ""
         )}
       >
-      <div className={cn("flex flex-wrap gap-2", bare ? "justify-start" : "justify-center")}>
+      {bare && (
+        <button
+          type="button"
+          onClick={() => setToolsOpen((v) => !v)}
+          aria-expanded={toolsOpen}
+          className="inline-flex items-center justify-between gap-2 w-full lg:w-auto lg:self-start h-9 px-3 rounded-full border border-border text-sm text-muted hover:bg-foreground/5 transition-colors"
+        >
+          <span className="inline-flex items-center gap-1.5">
+            <Plus className="h-4 w-4" />
+            Dodaj element
+          </span>
+          <ChevronDown
+            className={cn(
+              "h-4 w-4 transition-transform",
+              toolsOpen ? "rotate-180" : ""
+            )}
+          />
+        </button>
+      )}
+      <div
+        className={cn(
+          "flex flex-wrap gap-2",
+          bare ? (toolsOpen ? "justify-start" : "hidden") : "justify-center"
+        )}
+      >
         {/* Photos: one-click → file picker */}
         <button
           type="button"
