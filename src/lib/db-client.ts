@@ -165,6 +165,9 @@ export async function getEntry(id: string): Promise<ClientEntry | null> {
 export async function listEntries(opts?: {
   q?: string;
   tag?: string;
+  from?: number;
+  to?: number;
+  moods?: string[];
 }): Promise<ClientEntry[]> {
   const db = await openDb();
   const all = await new Promise<ClientEntry[]>((resolve, reject) => {
@@ -180,6 +183,19 @@ export async function listEntries(opts?: {
   }
   if (opts?.tag) {
     out = out.filter((e) => e.tags.includes(opts.tag!));
+  }
+  if (opts?.from != null) {
+    out = out.filter((e) => e.createdAt >= opts.from!);
+  }
+  if (opts?.to != null) {
+    out = out.filter((e) => e.createdAt <= opts.to!);
+  }
+  if (opts?.moods && opts.moods.length > 0) {
+    const set = new Set(opts.moods);
+    out = out.filter((e) => {
+      if (!e.mood) return false;
+      return e.mood.split(",").some((k) => set.has(k.trim()));
+    });
   }
   return out.sort((a, b) => b.createdAt - a.createdAt);
 }

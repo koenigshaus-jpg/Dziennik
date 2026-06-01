@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Editor } from "./Editor";
 import { MoodPicker } from "./MoodPicker";
 import { TagInput } from "./TagInput";
-import { ImageUploader, UploadedMedia } from "./ImageUploader";
-import { AudioRecorder } from "./AudioRecorder";
+import { MediaThumbs } from "./MediaThumbs";
+import { AudioList } from "./AudioList";
+import type { UploadedMedia } from "./media-types";
 import { Button } from "@/components/ui/button";
 import { formatDateTimeLocalInput, formatShortPL } from "@/lib/dates";
 import {
@@ -17,12 +18,16 @@ import {
   Hash,
   Calendar,
   Check,
+  Square,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MOOD_BY_KEY, serializeMoods, parseMoods } from "@/lib/moods";
-import { createEntry, updateEntry } from "@/lib/db-client";
+import { createEntry, updateEntry, newId } from "@/lib/db-client";
+import { compressImage } from "@/lib/clientImage";
+import { blobToDataUrl } from "@/lib/clientMedia";
 
-type PanelKey = "image" | "audio" | "mood" | "tags" | "date" | null;
+type PanelKey = "mood" | "tags" | "date" | null;
 
 interface Props {
   mode: "create" | "edit";
@@ -36,6 +41,12 @@ interface Props {
   };
   onSaved?: (id: string) => void;
   onCancel?: () => void;
+}
+
+function formatSeconds(s: number): string {
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2, "0")}`;
 }
 
 export function EntryForm({ mode, initial, onSaved, onCancel }: Props) {
@@ -59,8 +70,103 @@ export function EntryForm({ mode, initial, onSaved, onCancel }: Props) {
   const [openPanel, setOpenPanel] = useState<PanelKey>(null);
   const [saving, setSaving] = useState(false);
 
+  // images
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  // audio
+  const [recording, setRecording] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const [processingAudio, setProcessingAudio] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const timerRef = useRef<number | null>(null);
+  const startedAtRef = useRef<number>(0);
+
   function togglePanel(key: NonNullable<PanelKey>) {
     setOpenPanel((curr) => (curr === key ? null : key));
+  }
+
+  async function handleImageFiles(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    setUploadingImage(true);
+    const added: UploadedMedia[] = [];
+    for (const original of Array.from(files)) {
+      try {
+        const compressed = await compressImage(original);
+        const dataUrl = await blobToDataUrl(compressed);
+        added.push({
+          id: newId(),
+          path: dataUrl,
+          mime: compressed.type || "image/jpeg",
+          size: compressed.size,
+          kind: "image",
+        });
+      } catch (e) {
+        console.error(e);
+        toast.error(`Nie udało się dodać ${original.name}.`);
+      }
+    }
+    setImages((curr) => [...curr, ...added]);
+    setUploadingImage(false);
+    if (imageInputRef.current) imageInputRef.current.value = "";
+  }
+
+  async function startRecording() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream, { audioBitsPerSecond: 32000 });
+      mediaRecorderRef.current = mr;
+      chunksRef.current = [];
+      mr.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+      mr.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(chunksRef.current, {
+          type: mr.mimeType || "audio/webm",
+        });
+        setProcessingAudio(true);
+        try {
+          const mime = (blob.type || "audio/webm").split(";")[0];
+          const dataUrl = await blobToDataUrl(blob);
+          setAudio((curr) => [
+            ...curr,
+            {
+              id: newId(),
+              path: dataUrl,
+              mime,
+              size: blob.size,
+              kind: "audio",
+            },
+          ]);
+        } catch (e) {
+          console.error(e);
+          toast.error("Nie udało się zapisać nagrania.");
+        } finally {
+          setProcessingAudio(false);
+        }
+      };
+      mr.start();
+      startedAtRef.current = Date.now();
+      setElapsed(0);
+      timerRef.current = window.setInterval(() => {
+        setElapsed((Date.now() - startedAtRef.current) / 1000);
+      }, 250);
+      setRecording(true);
+    } catch (e) {
+      toast.error("Nie udało się włączyć mikrofonu.");
+      console.error(e);
+    }
+  }
+
+  function stopRecording() {
+    mediaRecorderRef.current?.stop();
+    if (timerRef.current) {
+      window.clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    setRecording(false);
   }
 
   async function save() {
@@ -107,24 +213,12 @@ export function EntryForm({ mode, initial, onSaved, onCancel }: Props) {
     }
   }
 
-  const tools: {
+  const panelTools: {
     key: NonNullable<PanelKey>;
     label: string;
     icon: typeof ImagePlus;
     badge?: string | null;
   }[] = [
-    {
-      key: "image",
-      label: "Zdjęcia",
-      icon: ImagePlus,
-      badge: images.length > 0 ? String(images.length) : null,
-    },
-    {
-      key: "audio",
-      label: "Audio",
-      icon: Mic,
-      badge: audio.length > 0 ? String(audio.length) : null,
-    },
     {
       key: "mood",
       label: "Nastrój",
@@ -150,6 +244,15 @@ export function EntryForm({ mode, initial, onSaved, onCancel }: Props) {
     },
   ];
 
+  const imageBadge = images.length > 0 ? String(images.length) : null;
+  const audioBadge = audio.length > 0 ? String(audio.length) : null;
+
+  const baseBtn =
+    "inline-flex items-center gap-1.5 h-9 px-3 rounded-full border text-sm transition-colors";
+  const idleBtn = "border-border hover:border-foreground/40 text-muted";
+  const valueBtn = "bg-foreground/5 border-foreground/20 hover:bg-foreground/10";
+  const activeBtn = "bg-foreground text-background border-foreground";
+
   return (
     <div className="flex flex-col gap-5">
       <div className="rounded-2xl border border-border bg-background/60 px-6 py-7 sm:px-8 sm:py-8 min-h-[240px] shadow-[0_1px_0_rgba(0,0,0,0.02),0_8px_30px_-12px_rgba(0,0,0,0.08)]">
@@ -161,7 +264,69 @@ export function EntryForm({ mode, initial, onSaved, onCancel }: Props) {
       </div>
 
       <div className="flex flex-wrap justify-center gap-2">
-        {tools.map((t) => {
+        {/* Photos: one-click → file picker */}
+        <button
+          type="button"
+          onClick={() => imageInputRef.current?.click()}
+          disabled={uploadingImage}
+          className={cn(baseBtn, imageBadge ? valueBtn : idleBtn)}
+        >
+          {uploadingImage ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <ImagePlus className="h-4 w-4" />
+          )}
+          <span>Zdjęcia</span>
+          {imageBadge && (
+            <span className="ml-0.5 text-xs font-medium opacity-70">
+              {imageBadge}
+            </span>
+          )}
+        </button>
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={(e) => handleImageFiles(e.target.files)}
+        />
+
+        {/* Audio: one-click → start/stop recording */}
+        <button
+          type="button"
+          onClick={recording ? stopRecording : startRecording}
+          disabled={processingAudio}
+          className={cn(
+            baseBtn,
+            recording
+              ? "bg-red-600 text-white border-red-600 hover:bg-red-700"
+              : audioBadge
+              ? valueBtn
+              : idleBtn
+          )}
+        >
+          {processingAudio ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : recording ? (
+            <Square className="h-4 w-4 fill-current" />
+          ) : (
+            <Mic className="h-4 w-4" />
+          )}
+          <span>
+            {recording
+              ? `Zatrzymaj (${formatSeconds(elapsed)})`
+              : "Audio"}
+          </span>
+          {!recording && audioBadge && (
+            <span className="ml-0.5 text-xs font-medium opacity-70">
+              {audioBadge}
+            </span>
+          )}
+        </button>
+
+        {/* Panel-based tools */}
+        {panelTools.map((t) => {
           const Icon = t.icon;
           const active = openPanel === t.key;
           const hasValue = !!t.badge;
@@ -171,12 +336,8 @@ export function EntryForm({ mode, initial, onSaved, onCancel }: Props) {
               type="button"
               onClick={() => togglePanel(t.key)}
               className={cn(
-                "inline-flex items-center gap-1.5 h-9 px-3 rounded-full border text-sm transition-colors",
-                active
-                  ? "bg-foreground text-background border-foreground"
-                  : hasValue
-                  ? "bg-foreground/5 border-foreground/20 hover:bg-foreground/10"
-                  : "border-border hover:border-foreground/40 text-muted"
+                baseBtn,
+                active ? activeBtn : hasValue ? valueBtn : idleBtn
               )}
               aria-expanded={active}
             >
@@ -197,14 +358,21 @@ export function EntryForm({ mode, initial, onSaved, onCancel }: Props) {
         })}
       </div>
 
+      {(images.length > 0 || audio.length > 0) && (
+        <div className="flex flex-col gap-3">
+          <MediaThumbs
+            value={images}
+            onRemove={(id) => setImages(images.filter((x) => x.id !== id))}
+          />
+          <AudioList
+            value={audio}
+            onRemove={(id) => setAudio(audio.filter((x) => x.id !== id))}
+          />
+        </div>
+      )}
+
       {openPanel && (
         <div className="border border-border rounded-xl p-4 bg-foreground/[0.02] animate-in fade-in slide-in-from-top-1 duration-150">
-          {openPanel === "image" && (
-            <ImageUploader value={images} onChange={setImages} />
-          )}
-          {openPanel === "audio" && (
-            <AudioRecorder value={audio} onChange={setAudio} />
-          )}
           {openPanel === "mood" && (
             <MoodPicker value={moods} onChange={setMoods} />
           )}
