@@ -100,7 +100,7 @@ export function MediaThumbs({ value, onRemove }: Props) {
                 <button
                   type="button"
                   onClick={(e) => e.stopPropagation()}
-                  className="absolute top-1 right-1 bg-black/70 text-white rounded-full p-1 hover:bg-black z-10"
+                  className="absolute top-1 right-1 bg-white/90 text-foreground rounded-full p-1 shadow-sm ring-1 ring-black/5 z-10 hover:bg-foreground/5"
                   aria-label="Menu zdjęcia"
                 >
                   <MoreVertical className="h-3.5 w-3.5" />
