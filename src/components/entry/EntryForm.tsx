@@ -3,13 +3,19 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Editor } from "./Editor";
+import { Editor, type EditorHandle } from "./Editor";
 import { MoodPicker } from "./MoodPicker";
 import { TagInput } from "./TagInput";
 import { MediaThumbs } from "./MediaThumbs";
 import { AudioList } from "./AudioList";
 import type { UploadedMedia } from "./media-types";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { formatDateTimeLocalInput, formatShortPL } from "@/lib/dates";
 import {
   ImagePlus,
@@ -17,7 +23,6 @@ import {
   Smile,
   Hash,
   Calendar,
-  Check,
   Square,
   Loader2,
   Plus,
@@ -30,6 +35,12 @@ import { compressImage } from "@/lib/clientImage";
 import { blobToDataUrl } from "@/lib/clientMedia";
 
 type PanelKey = "mood" | "tags" | "date" | null;
+
+const PANEL_TITLES: Record<NonNullable<PanelKey>, string> = {
+  mood: "Wybierz nastrój",
+  tags: "Dodaj tagi",
+  date: "Edytuj datę",
+};
 
 interface Props {
   mode: "create" | "edit";
@@ -46,11 +57,19 @@ interface Props {
   bare?: boolean;
   onDirtyChange?: (dirty: boolean) => void;
   onSavingChange?: (saving: boolean) => void;
+  onAudioRecordingChange?: (state: {
+    recording: boolean;
+    elapsed: number;
+    processing: boolean;
+  }) => void;
   actionsSlot?: React.ReactNode;
 }
 
 export interface EntryFormHandle {
   save: () => Promise<void>;
+  openImagePicker: () => void;
+  toggleAudioRecording: () => void;
+  openPanel: (key: "mood" | "tags" | "date") => void;
 }
 
 function formatSeconds(s: number): string {
@@ -60,7 +79,17 @@ function formatSeconds(s: number): string {
 }
 
 export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
-  { mode, initial, onSaved, onCancel, bare = false, onDirtyChange, onSavingChange, actionsSlot },
+  {
+    mode,
+    initial,
+    onSaved,
+    onCancel,
+    bare = false,
+    onDirtyChange,
+    onSavingChange,
+    onAudioRecordingChange,
+    actionsSlot,
+  },
   ref
 ) {
   const router = useRouter();
@@ -98,6 +127,109 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<number | null>(null);
   const startedAtRef = useRef<number>(0);
+
+  // speech-to-text
+  const STT_MAX_SECONDS = 60;
+  const editorRef = useRef<EditorHandle>(null);
+  const [sttRecording, setSttRecording] = useState(false);
+  const [sttElapsed, setSttElapsed] = useState(0);
+  const [sttProcessing, setSttProcessing] = useState(false);
+  const sttRecorderRef = useRef<MediaRecorder | null>(null);
+  const sttChunksRef = useRef<Blob[]>([]);
+  const sttTimerRef = useRef<number | null>(null);
+  const sttStartedAtRef = useRef<number>(0);
+  const sttAutoStopRef = useRef<number | null>(null);
+
+  async function startStt() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream, { audioBitsPerSecond: 32000 });
+      sttRecorderRef.current = mr;
+      sttChunksRef.current = [];
+      mr.ondataavailable = (e) => {
+        if (e.data.size > 0) sttChunksRef.current.push(e.data);
+      };
+      mr.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const mime = mr.mimeType || "audio/webm";
+        const blob = new Blob(sttChunksRef.current, { type: mime });
+        setSttProcessing(true);
+        try {
+          const ext = mime.includes("ogg")
+            ? "ogg"
+            : mime.includes("mp4")
+            ? "mp4"
+            : "webm";
+          const file = new File([blob], `voice.${ext}`, { type: blob.type });
+          const fd = new FormData();
+          fd.append("file", file);
+          const res = await fetch("/api/transcribe", {
+            method: "POST",
+            body: fd,
+          });
+          if (!res.ok) {
+            const err = (await res.json().catch(() => null)) as {
+              error?: string;
+            } | null;
+            throw new Error(err?.error || "Transkrypcja nie powiodła się.");
+          }
+          const data = (await res.json()) as { text?: string };
+          const text = (data.text || "").trim();
+          if (!text) {
+            toast.message("Nie wykryto mowy.");
+          } else {
+            editorRef.current?.insertText(text);
+          }
+        } catch (e) {
+          console.error(e);
+          toast.error(
+            e instanceof Error ? e.message : "Transkrypcja nie powiodła się."
+          );
+        } finally {
+          setSttProcessing(false);
+        }
+      };
+      mr.start();
+      sttStartedAtRef.current = Date.now();
+      setSttElapsed(0);
+      sttTimerRef.current = window.setInterval(() => {
+        setSttElapsed((Date.now() - sttStartedAtRef.current) / 1000);
+      }, 250);
+      sttAutoStopRef.current = window.setTimeout(() => {
+        toast.message(`Osiągnięto limit ${STT_MAX_SECONDS}s.`);
+        stopStt();
+      }, STT_MAX_SECONDS * 1000);
+      setSttRecording(true);
+    } catch (e) {
+      toast.error("Nie udało się włączyć mikrofonu.");
+      console.error(e);
+    }
+  }
+
+  function stopStt() {
+    sttRecorderRef.current?.stop();
+    if (sttTimerRef.current) {
+      window.clearInterval(sttTimerRef.current);
+      sttTimerRef.current = null;
+    }
+    if (sttAutoStopRef.current) {
+      window.clearTimeout(sttAutoStopRef.current);
+      sttAutoStopRef.current = null;
+    }
+    setSttRecording(false);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (sttTimerRef.current) window.clearInterval(sttTimerRef.current);
+      if (sttAutoStopRef.current) window.clearTimeout(sttAutoStopRef.current);
+      if (sttRecorderRef.current && sttRecorderRef.current.state !== "inactive") {
+        try {
+          sttRecorderRef.current.stop();
+        } catch {}
+      }
+    };
+  }, []);
 
   function togglePanel(key: NonNullable<PanelKey>) {
     setOpenPanel((curr) => (curr === key ? null : key));
@@ -232,7 +364,16 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
     }
   }
 
-  useImperativeHandle(ref, () => ({ save }));
+  useImperativeHandle(ref, () => ({
+    save,
+    openImagePicker: () => imageInputRef.current?.click(),
+    toggleAudioRecording: () => (recording ? stopRecording() : startRecording()),
+    openPanel: (key) => setOpenPanel(key),
+  }));
+
+  useEffect(() => {
+    onAudioRecordingChange?.({ recording, elapsed, processing: processingAudio });
+  }, [recording, elapsed, processingAudio, onAudioRecordingChange]);
 
   useEffect(() => {
     onSavingChange?.(saving);
@@ -308,8 +449,66 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
   const valueBtn = "bg-foreground/5 border-foreground/20 hover:bg-foreground/10";
   const activeBtn = "bg-foreground text-background border-foreground";
 
+  const renderMicButton = (positionClassName: string) => (
+    <button
+      type="button"
+      onClick={sttRecording ? stopStt : startStt}
+      disabled={sttProcessing}
+      aria-label={
+        sttRecording
+          ? "Zatrzymaj dyktowanie"
+          : sttProcessing
+          ? "Przetwarzanie"
+          : "Dyktuj"
+      }
+      title={sttRecording ? "Zatrzymaj dyktowanie" : "Dyktuj (Speech-to-Text)"}
+      className={cn(
+        "z-20 inline-flex items-center justify-center gap-1.5 h-10 rounded-full transition-all",
+        positionClassName,
+        sttRecording
+          ? "bg-red-600 text-white px-3 shadow-md hover:bg-red-700"
+          : "w-10 text-muted hover:text-foreground hover:bg-foreground/5",
+        sttProcessing ? "opacity-70 cursor-not-allowed" : ""
+      )}
+    >
+      {sttProcessing ? (
+        <Loader2 className="h-5 w-5 animate-spin" />
+      ) : sttRecording ? (
+        <>
+          <Square className="h-4 w-4 fill-current" />
+          <span className="text-sm tabular-nums">
+            {formatSeconds(sttElapsed)}
+          </span>
+        </>
+      ) : (
+        <Mic className="h-5 w-5" />
+      )}
+    </button>
+  );
+
   return (
     <div className={cn("flex flex-col gap-5", bare ? "pb-44 lg:pb-0" : "")}>
+      {(selectedMoods.length > 0 || tags.length > 0) && (
+        <div className="flex flex-wrap gap-2">
+          {selectedMoods.map((m) => (
+            <span
+              key={m.key}
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-full border border-foreground/20 text-sm select-none"
+            >
+              <span className="text-base leading-none">{m.emoji}</span>
+              <span>{m.label}</span>
+            </span>
+          ))}
+          {tags.map((t) => (
+            <span
+              key={t}
+              className="inline-flex items-center h-9 px-3 rounded-full border border-foreground/20 text-sm text-muted select-none"
+            >
+              #{t}
+            </span>
+          ))}
+        </div>
+      )}
       <div
         onDragEnter={(e) => {
           if (!Array.from(e.dataTransfer.types).includes("Files")) return;
@@ -359,6 +558,7 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
         )}
       >
         <Editor
+          ref={editorRef}
           value={content}
           onChange={setContent}
           placeholder="Zacznij pisać…"
@@ -370,6 +570,11 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
               Upuść zdjęcia, żeby dodać
             </div>
           </div>
+        )}
+        {renderMicButton(
+          bare
+            ? "hidden lg:inline-flex lg:absolute lg:bottom-3 lg:right-3"
+            : "absolute bottom-3 right-3"
         )}
       </div>
 
@@ -386,59 +591,56 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
         </div>
       )}
 
-      {(selectedMoods.length > 0 || tags.length > 0) && (
-        <div className="flex flex-wrap gap-2">
-          {selectedMoods.map((m) => (
-            <span
-              key={m.key}
-              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-full border bg-foreground/5 border-foreground/20 text-sm select-none"
-            >
-              <span className="text-base leading-none">{m.emoji}</span>
-              <span>{m.label}</span>
-            </span>
-          ))}
-          {tags.map((t) => (
-            <span
-              key={t}
-              className="inline-flex items-center h-9 px-3 rounded-full border border-foreground/20 text-sm text-muted select-none"
-            >
-              #{t}
-            </span>
-          ))}
-        </div>
-      )}
 
       <div
         className={cn(
           "flex flex-col gap-3",
           bare
-            ? "lg:static lg:bg-transparent lg:border-0 lg:p-0 fixed bottom-14 left-0 right-0 z-30 bg-background border-t border-border px-4 pt-3 pb-4"
+            ? "lg:hidden fixed bottom-14 left-0 right-0 z-30 bg-background border-t border-border px-4 pt-3 pb-4"
             : ""
         )}
       >
-      {bare && (
-        <button
-          type="button"
-          onClick={() => setToolsOpen((v) => !v)}
-          aria-expanded={toolsOpen}
-          className="inline-flex items-center justify-between gap-2 w-full lg:w-auto lg:self-start h-9 px-3 rounded-full border border-border text-sm text-muted hover:bg-foreground/5 transition-colors"
-        >
-          <span className="inline-flex items-center gap-1.5">
-            <Plus className="h-4 w-4" />
-            Dodaj element
-          </span>
-          <ChevronDown
-            className={cn(
-              "h-4 w-4 transition-transform",
-              toolsOpen ? "rotate-180" : ""
-            )}
-          />
-        </button>
-      )}
+      {bare &&
+        renderMicButton(
+          "lg:hidden absolute -top-12 right-4"
+        )}
+      {bare &&
+        (recording ? (
+          <button
+            type="button"
+            onClick={stopRecording}
+            className="inline-flex items-center justify-center gap-1.5 w-full h-9 px-3 rounded-full border bg-red-600 text-white border-red-600 hover:bg-red-700 text-sm transition-colors"
+          >
+            <Square className="h-3.5 w-3.5 fill-current" />
+            <span>Nagrywam {formatSeconds(elapsed)}</span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setToolsOpen((v) => !v)}
+            aria-expanded={toolsOpen}
+            className="inline-flex items-center justify-between gap-2 w-full h-9 px-3 rounded-full border border-border text-sm text-muted hover:bg-foreground/5 transition-colors"
+          >
+            <span className="inline-flex items-center gap-1.5">
+              <Plus className="h-4 w-4" />
+              Dodaj element
+            </span>
+            <ChevronDown
+              className={cn(
+                "h-4 w-4 transition-transform",
+                toolsOpen ? "rotate-180" : ""
+              )}
+            />
+          </button>
+        ))}
       <div
         className={cn(
           "flex flex-wrap gap-2",
-          bare ? (toolsOpen ? "justify-start" : "hidden") : "justify-center"
+          bare
+            ? recording || !toolsOpen
+              ? "hidden"
+              : "justify-start"
+            : "justify-center"
         )}
       >
         {/* Photos: one-click → file picker */}
@@ -493,7 +695,7 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
           <span>
             {recording
               ? `Zatrzymaj (${formatSeconds(elapsed)})`
-              : "Dodaj audio"}
+              : "Nagraj audio"}
           </span>
           {!recording && audioBadge && (
             <span className="ml-0.5 text-xs font-medium opacity-70">
@@ -537,31 +739,37 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
       {actionsSlot && <div className="lg:hidden">{actionsSlot}</div>}
       </div>
 
-      {openPanel && (
-        <div className="border border-border rounded-xl p-4 bg-foreground/[0.02] animate-in fade-in slide-in-from-top-1 duration-150">
-          {openPanel === "mood" && (
-            <MoodPicker value={moods} onChange={setMoods} />
-          )}
-          {openPanel === "tags" && (
-            <TagInput value={tags} onChange={setTags} />
-          )}
-          {openPanel === "date" && (
-            <input
-              type="datetime-local"
-              value={createdAt}
-              onChange={(e) => setCreatedAt(e.target.value)}
-              className="h-11 rounded-md border border-border bg-background px-3 text-base"
-            />
-          )}
-          <button
-            type="button"
-            onClick={() => setOpenPanel(null)}
-            className="mt-3 inline-flex items-center gap-1 text-xs text-muted hover:text-foreground"
-          >
-            <Check className="h-3.5 w-3.5" /> Gotowe
-          </button>
-        </div>
-      )}
+      <Dialog
+        open={!!openPanel}
+        onOpenChange={(o) => !o && setOpenPanel(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {openPanel ? PANEL_TITLES[openPanel] : ""}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="mt-2">
+            {openPanel === "mood" && (
+              <MoodPicker value={moods} onChange={setMoods} />
+            )}
+            {openPanel === "tags" && (
+              <TagInput value={tags} onChange={setTags} />
+            )}
+            {openPanel === "date" && (
+              <input
+                type="datetime-local"
+                value={createdAt}
+                onChange={(e) => setCreatedAt(e.target.value)}
+                className="h-11 w-full rounded-md border border-border bg-background px-3 text-base"
+              />
+            )}
+          </div>
+          <div className="mt-4 flex justify-end">
+            <Button onClick={() => setOpenPanel(null)}>Gotowe</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {!bare && (
         <div className="flex flex-col sm:flex-row sm:justify-center gap-3 pt-10">

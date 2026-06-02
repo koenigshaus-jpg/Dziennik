@@ -2,7 +2,17 @@
 
 import { useRef, useState } from "react";
 import { toast } from "sonner";
-import { Trash2 } from "lucide-react";
+import {
+  Trash2,
+  Plus,
+  ChevronDown,
+  ImagePlus,
+  Mic,
+  Smile,
+  Hash,
+  Calendar,
+  Square,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -13,6 +23,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
 import { formatWithWeekdayPL, formatTimePL } from "@/lib/dates";
 import { deleteEntry, getEntry, type ClientEntry } from "@/lib/db-client";
 import { EntryForm, type EntryFormHandle } from "./EntryForm";
@@ -24,10 +41,21 @@ interface Props {
   bodyClassName?: string;
 }
 
+function formatSeconds(s: number): string {
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2, "0")}`;
+}
+
 export function EntryEditor({ entry, onUpdated, onDeleted, bodyClassName }: Props) {
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [audioState, setAudioState] = useState({
+    recording: false,
+    elapsed: 0,
+    processing: false,
+  });
   const formRef = useRef<EntryFormHandle>(null);
 
   async function handleDelete() {
@@ -51,7 +79,62 @@ export function EntryEditor({ entry, onUpdated, onDeleted, bodyClassName }: Prop
         <p className="text-sm uppercase tracking-wider text-muted pt-2">
           {formatWithWeekdayPL(date)} · {formatTimePL(date)}
         </p>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2">
+          {audioState.recording ? (
+            <button
+              type="button"
+              onClick={() => formRef.current?.toggleAudioRecording()}
+              className="hidden lg:inline-flex items-center gap-1.5 h-9 px-3 rounded-full border bg-red-600 text-white border-red-600 hover:bg-red-700 text-sm transition-colors"
+            >
+              <Square className="h-3.5 w-3.5 fill-current" />
+              <span>Nagrywam {formatSeconds(audioState.elapsed)}</span>
+            </button>
+          ) : (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="hidden lg:inline-flex items-center gap-1.5 h-9 px-3 rounded-full border border-border text-muted hover:bg-foreground/5 hover:text-foreground text-sm transition-colors data-[state=open]:bg-foreground/5"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>Dodaj element</span>
+                  <ChevronDown className="h-4 w-4 opacity-60" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuItem
+                  onSelect={() => formRef.current?.openImagePicker()}
+                >
+                  <ImagePlus className="h-4 w-4 text-muted" />
+                  <span>Dodaj zdjęcie</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => formRef.current?.toggleAudioRecording()}
+                >
+                  <Mic className="h-4 w-4 text-muted" />
+                  <span>Nagraj audio</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => formRef.current?.openPanel("mood")}
+                >
+                  <Smile className="h-4 w-4 text-muted" />
+                  <span>Dodaj nastrój</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => formRef.current?.openPanel("tags")}
+                >
+                  <Hash className="h-4 w-4 text-muted" />
+                  <span>Dodaj tag</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => formRef.current?.openPanel("date")}
+                >
+                  <Calendar className="h-4 w-4 text-muted" />
+                  <span>Edytuj datę</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
           <Dialog>
             <DialogTrigger asChild>
               <button
@@ -111,6 +194,7 @@ export function EntryEditor({ entry, onUpdated, onDeleted, bodyClassName }: Prop
           }}
           onDirtyChange={setDirty}
           onSavingChange={setSaving}
+          onAudioRecordingChange={setAudioState}
           onSaved={async (id) => {
             setDirty(false);
             try {
