@@ -1,19 +1,105 @@
 @import "tailwindcss";
 
 :root {
-  --background: #fdfdfb;
-  --foreground: #3f3f46;
-  --muted: #a1a1aa;
-  --border: #ececea;
-  --accent: #3f3f46;
+  /* === Surface (M3 tiers) === */
+  --surface: #fdfdfb;
+  --surface-container: #f7f7f4;
+  --surface-container-high: #f1f1ee;
+  --on-surface: #3f3f46;
+  --on-surface-variant: #71717a;
+  --on-surface-muted: #a1a1aa;
+
+  /* === Primary === */
+  --primary: #3f3f46;
+  --on-primary: #fdfdfb;
+  --primary-container: #ececea;
+  --on-primary-container: #3f3f46;
+
+  /* === Secondary / Tertiary === */
+  --secondary: #71717a;
+  --on-secondary: #fdfdfb;
+  --tertiary: #525252;
+  --on-tertiary: #fdfdfb;
+
+  /* === Funkcyjne === */
+  --destructive: #dc2626;
+  --on-destructive: #fdfdfb;
+  --destructive-container: #fef2f2;
+  --on-destructive-container: #b91c1c;
+  --success: #16a34a;
+  --warning: #d97706;
+  --recording: #dc2626;
+
+  /* === Border / outline / overlay === */
+  --outline: #ececea;
+  --outline-variant: #d4d4d4;
+  --ring: #3f3f46;
+  --scrim: rgb(0 0 0 / 0.5);
+
+  /* === Radius scale === */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 24px;
+  --radius-full: 9999px;
+
+  /* === Elevation === */
+  --elevation-1: 0 1px 2px rgb(0 0 0 / 0.04);
+  --elevation-2: 0 2px 8px rgb(0 0 0 / 0.06);
+  --elevation-3: 0 1px 0 rgb(0 0 0 / 0.02), 0 8px 30px -12px rgb(0 0 0 / 0.08);
+
+  /* === Backward-compat aliases === */
+  --background: var(--surface);
+  --foreground: var(--on-surface);
+  --muted: var(--on-surface-muted);
+  --border: var(--outline);
+  --accent: var(--primary);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-muted: var(--muted);
-  --color-border: var(--border);
-  --color-accent: var(--accent);
+  /* New M3 tokens */
+  --color-surface: var(--surface);
+  --color-surface-container: var(--surface-container);
+  --color-surface-container-high: var(--surface-container-high);
+  --color-on-surface: var(--on-surface);
+  --color-on-surface-variant: var(--on-surface-variant);
+  --color-on-surface-muted: var(--on-surface-muted);
+  --color-primary: var(--primary);
+  --color-on-primary: var(--on-primary);
+  --color-primary-container: var(--primary-container);
+  --color-on-primary-container: var(--on-primary-container);
+  --color-secondary: var(--secondary);
+  --color-on-secondary: var(--on-secondary);
+  --color-tertiary: var(--tertiary);
+  --color-on-tertiary: var(--on-tertiary);
+  --color-destructive: var(--destructive);
+  --color-on-destructive: var(--on-destructive);
+  --color-destructive-container: var(--destructive-container);
+  --color-on-destructive-container: var(--on-destructive-container);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-recording: var(--recording);
+  --color-outline: var(--outline);
+  --color-outline-variant: var(--outline-variant);
+  --color-ring: var(--ring);
+
+  /* Backward-compat — istniejący kod używa tych nazw */
+  --color-background: var(--surface);
+  --color-foreground: var(--on-surface);
+  --color-muted: var(--on-surface-muted);
+  --color-border: var(--outline);
+  --color-accent: var(--primary);
+
+  /* Radius */
+  --radius-xs: var(--radius-xs);
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+  --radius-2xl: var(--radius-2xl);
+
   --font-sans: var(--font-sans);
   --font-display: var(--font-display);
 }

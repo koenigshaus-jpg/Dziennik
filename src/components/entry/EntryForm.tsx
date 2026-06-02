@@ -466,7 +466,7 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
         "z-20 inline-flex items-center justify-center gap-1.5 h-10 rounded-full transition-all",
         positionClassName,
         sttRecording
-          ? "bg-red-600 text-white px-3 shadow-md hover:bg-red-700"
+          ? "bg-recording text-on-destructive px-3 shadow-[var(--elevation-2)] hover:bg-recording/90"
           : "w-10 text-muted hover:text-foreground hover:bg-foreground/5",
         sttProcessing ? "opacity-70 cursor-not-allowed" : ""
       )}
@@ -549,7 +549,7 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
           "relative transition-colors",
           bare
             ? cn(
-                "rounded-md min-h-[120px]",
+                "rounded-md min-h-32",
                 dragOver
                   ? "outline-2 outline-dashed outline-foreground/40 bg-foreground/[0.04]"
                   : ""
@@ -632,7 +632,7 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
           <button
             type="button"
             onClick={stopRecording}
-            className="inline-flex items-center justify-center gap-1.5 w-full h-9 px-3 rounded-full border bg-red-600 text-white border-red-600 hover:bg-red-700 text-sm transition-colors"
+            className="inline-flex items-center justify-center gap-1.5 w-full h-9 px-3 rounded-full border bg-recording text-on-destructive border-recording hover:bg-recording/90 text-sm transition-colors"
           >
             <Square className="h-3.5 w-3.5 fill-current" />
             <span>Nagrywam {formatSeconds(elapsed)}</span>
@@ -702,7 +702,7 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
           className={cn(
             baseBtn,
             recording
-              ? "bg-red-600 text-white border-red-600 hover:bg-red-700"
+              ? "bg-recording text-on-destructive border-recording hover:bg-recording/90"
               : audioBadge
               ? valueBtn
               : idleBtn
@@ -800,7 +800,7 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
             size="lg"
             onClick={save}
             disabled={saving}
-            className="w-full sm:w-auto sm:min-w-[200px]"
+            className="w-full sm:w-auto sm:min-w-52"
           >
             {saving ? "Zapisuję…" : mode === "create" ? "Zapisz wpis" : "Zapisz zmiany"}
           </Button>

@@ -121,7 +121,7 @@ export function MediaThumbs({ value, onRemove }: Props) {
                     e.preventDefault();
                     setConfirmId(m.id);
                   }}
-                  className="text-red-600 focus:text-red-700"
+                  className="text-destructive focus:text-destructive"
                 >
                   <Trash2 className="h-4 w-4" />
                   Usuń

@@ -35,7 +35,7 @@ export function TagInput({ value, onChange }: Props) {
   }
 
   return (
-    <div className="flex flex-wrap gap-2 items-center border border-border rounded-md p-2 min-h-[44px]">
+    <div className="flex flex-wrap gap-2 items-center border border-border rounded-md p-2 min-h-11">
       {value.map((t) => (
         <span
           key={t}
@@ -58,7 +58,7 @@ export function TagInput({ value, onChange }: Props) {
         onKeyDown={onKey}
         onBlur={addCurrent}
         placeholder={value.length === 0 ? "Dodaj tag (Enter)" : ""}
-        className="flex-1 min-w-[120px] bg-transparent outline-none text-sm py-1"
+        className="flex-1 min-w-32 bg-transparent outline-none text-sm py-1"
       />
     </div>
   );

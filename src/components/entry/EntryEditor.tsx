@@ -84,7 +84,7 @@ export function EntryEditor({ entry, onUpdated, onDeleted, bodyClassName }: Prop
             <button
               type="button"
               onClick={() => formRef.current?.toggleAudioRecording()}
-              className="hidden lg:inline-flex items-center gap-1.5 h-9 px-3 rounded-full border bg-red-600 text-white border-red-600 hover:bg-red-700 text-sm transition-colors"
+              className="hidden lg:inline-flex items-center gap-1.5 h-9 px-3 rounded-full border bg-recording text-on-destructive border-recording hover:bg-recording/90 text-sm transition-colors"
             >
               <Square className="h-3.5 w-3.5 fill-current" />
               <span>Nagrywam {formatSeconds(audioState.elapsed)}</span>
@@ -140,7 +140,7 @@ export function EntryEditor({ entry, onUpdated, onDeleted, bodyClassName }: Prop
               <button
                 type="button"
                 aria-label="Usuń wpis"
-                className="inline-flex h-9 w-9 items-center justify-center rounded-full text-muted hover:bg-red-50 hover:text-red-600 transition-colors"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full text-muted hover:bg-destructive-container hover:text-destructive transition-colors"
               >
                 <Trash2 className="h-4 w-4" />
               </button>

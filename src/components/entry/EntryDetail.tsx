@@ -102,7 +102,7 @@ export function EntryDetail({ entry, onChanged }: Props) {
             <button
               type="button"
               aria-label="Usuń"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full text-red-600 hover:bg-red-50 transition-colors"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full text-destructive hover:bg-destructive-container transition-colors"
             >
               <Trash2 className="h-4 w-4" />
             </button>
