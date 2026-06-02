@@ -64,7 +64,7 @@ export function HistoryPreviewPane({ selectedId }: { selectedId: string | null }
   }
 
   return (
-    <div className="py-8 pl-10 pr-6">
+    <div className="py-8 pl-10 pr-6 min-h-full flex flex-col">
       <EntryEditor
         entry={entry}
         onUpdated={(fresh) => setEntry(fresh)}

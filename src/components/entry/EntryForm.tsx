@@ -487,7 +487,12 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
   );
 
   return (
-    <div className={cn("flex flex-col gap-5", bare ? "pb-44 lg:pb-0" : "")}>
+    <div
+      className={cn(
+        "flex flex-col gap-3.5",
+        bare ? "pb-44 lg:pb-0 lg:flex-1 lg:min-h-0" : ""
+      )}
+    >
       {(selectedMoods.length > 0 || tags.length > 0) && (
         <div className="flex flex-wrap gap-2">
           {selectedMoods.map((m) => (
@@ -550,7 +555,7 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
                   : ""
               )
             : cn(
-                "rounded-2xl border bg-background/60 px-6 py-7 sm:px-8 sm:py-8 min-h-[224px] sm:min-h-[336px] lg:min-h-[416px] shadow-[0_1px_0_rgba(0,0,0,0.02),0_8px_30px_-12px_rgba(0,0,0,0.08)]",
+                "rounded-2xl border bg-background/60 px-6 pt-0.5 pb-7 sm:px-8 sm:pt-0.5 sm:pb-8 min-h-[224px] sm:min-h-[336px] lg:min-h-[416px] shadow-[0_1px_0_rgba(0,0,0,0.02),0_8px_30px_-12px_rgba(0,0,0,0.08)] lg:flex lg:flex-col",
                 dragOver
                   ? "border-foreground/50 bg-foreground/[0.04]"
                   : "border-border"
@@ -576,10 +581,28 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
             ? "hidden lg:inline-flex lg:absolute lg:bottom-3 lg:right-3"
             : "absolute bottom-3 right-3"
         )}
+        {!bare && (images.length > 0 || audio.length > 0) && (
+          <div className="hidden lg:flex flex-col gap-3 lg:mt-auto lg:pt-4 lg:pr-12">
+            <MediaThumbs
+              value={images}
+              onRemove={(id) => setImages(images.filter((x) => x.id !== id))}
+            />
+            <AudioList
+              value={audio}
+              onRemove={(id) => setAudio(audio.filter((x) => x.id !== id))}
+            />
+          </div>
+        )}
       </div>
 
       {(images.length > 0 || audio.length > 0) && (
-        <div className="flex flex-col gap-3">
+        <div
+          className={cn(
+            "flex flex-col gap-3",
+            !bare && "lg:hidden",
+            bare && "lg:mt-auto"
+          )}
+        >
           <MediaThumbs
             value={images}
             onRemove={(id) => setImages(images.filter((x) => x.id !== id))}

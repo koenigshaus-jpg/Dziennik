@@ -1,16 +1,48 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { X, ChevronLeft, ChevronRight } from "lucide-react";
+import { X, ChevronLeft, ChevronRight, MoreVertical, Download, Trash2 } from "lucide-react";
 import type { UploadedMedia } from "./media-types";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 
 interface Props {
   value: UploadedMedia[];
   onRemove: (id: string) => void;
 }
 
+function extFromMime(mime: string): string {
+  if (!mime) return "bin";
+  const sub = mime.split("/")[1] ?? "bin";
+  if (sub === "jpeg") return "jpg";
+  return sub.split("+")[0]; // strip e.g. "svg+xml"
+}
+
+function downloadMedia(m: UploadedMedia) {
+  const a = document.createElement("a");
+  a.href = m.path;
+  a.download = `${m.id}.${extFromMime(m.mime)}`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
 export function MediaThumbs({ value, onRemove }: Props) {
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
 
   const close = useCallback(() => setLightboxIdx(null), []);
   const prev = useCallback(
@@ -40,6 +72,7 @@ export function MediaThumbs({ value, onRemove }: Props) {
 
   if (value.length === 0) return null;
   const current = lightboxIdx !== null ? value[lightboxIdx] : null;
+  const confirmTarget = confirmId ? value.find((m) => m.id === confirmId) ?? null : null;
 
   return (
     <>
@@ -62,17 +95,72 @@ export function MediaThumbs({ value, onRemove }: Props) {
                 className="max-w-full max-h-full object-contain"
               />
             </button>
-            <button
-              type="button"
-              onClick={() => onRemove(m.id)}
-              className="absolute top-1 right-1 bg-black/70 text-white rounded-full p-1 hover:bg-black z-10"
-              aria-label="Usuń zdjęcie"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  onClick={(e) => e.stopPropagation()}
+                  className="absolute top-1 right-1 bg-black/70 text-white rounded-full p-1 hover:bg-black z-10"
+                  aria-label="Menu zdjęcia"
+                >
+                  <MoreVertical className="h-3.5 w-3.5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    downloadMedia(m);
+                  }}
+                >
+                  <Download className="h-4 w-4" />
+                  Pobierz
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={(e) => {
+                    e.preventDefault();
+                    setConfirmId(m.id);
+                  }}
+                  className="text-red-600 focus:text-red-700"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Usuń
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         ))}
       </div>
+
+      <Dialog
+        open={confirmTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmId(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Usunąć zdjęcie?</DialogTitle>
+            <DialogDescription>
+              Tej operacji nie da się cofnąć. Zdjęcie zostanie usunięte z wpisu.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2 mt-4">
+            <DialogClose asChild>
+              <Button variant="outline">Anuluj</Button>
+            </DialogClose>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (confirmId) onRemove(confirmId);
+                setConfirmId(null);
+              }}
+            >
+              Usuń
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {current && (
         <div

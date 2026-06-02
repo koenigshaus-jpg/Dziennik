@@ -15,9 +15,9 @@ export function AudioList({ value, onRemove }: Props) {
       {value.map((m) => (
         <div
           key={m.id}
-          className="flex items-center gap-2 border border-border rounded-md p-2"
+          className="flex items-center gap-2 w-1/2"
         >
-          <audio src={m.path} controls className="flex-1 h-9" />
+          <audio src={m.path} controls className="flex-1 h-9 min-w-0" />
           <button
             type="button"
             onClick={() => onRemove(m.id)}

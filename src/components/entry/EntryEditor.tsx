@@ -74,7 +74,7 @@ export function EntryEditor({ entry, onUpdated, onDeleted, bodyClassName }: Prop
   const date = new Date(entry.createdAt);
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-5 lg:flex-1 lg:min-h-0">
       <div className="flex items-start justify-between gap-4">
         <p className="text-sm uppercase tracking-wider text-muted pt-2">
           {formatWithWeekdayPL(date)} · {formatTimePL(date)}
@@ -178,7 +178,7 @@ export function EntryEditor({ entry, onUpdated, onDeleted, bodyClassName }: Prop
         </div>
       </div>
 
-      <div className={bodyClassName}>
+      <div className={cn(bodyClassName, "lg:flex-1 lg:flex lg:flex-col lg:min-h-0")}>
         <EntryForm
           ref={formRef}
           key={entry.id}
