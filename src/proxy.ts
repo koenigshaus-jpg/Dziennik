@@ -1,32 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
-// import { verifySessionToken, SESSION_COOKIE_NAME } from "@/lib/session";
+import { createSupabaseServerClientForMiddleware } from "@/lib/supabase/server";
 
-// AUTH WYŁĄCZONY — każdy z adresem może wejść.
-// Żeby przywrócić: odkomentuj poniżej i import na górze.
-const AUTH_ENABLED = false;
-
-const PUBLIC_PATHS = ["/login", "/api/login"];
+const PUBLIC_PATHS = ["/login", "/api/auth/callback"];
 
 export async function proxy(req: NextRequest) {
-  if (!AUTH_ENABLED) return NextResponse.next();
-
   const { pathname } = req.nextUrl;
 
   if (PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
     return NextResponse.next();
   }
 
-  // const token = req.cookies.get(SESSION_COOKIE_NAME)?.value;
-  // const secret = process.env.SESSION_SECRET ?? "";
-  // const valid = await verifySessionToken(token, secret);
-  // if (!valid) {
-  //   const url = req.nextUrl.clone();
-  //   url.pathname = "/login";
-  //   if (pathname !== "/") url.searchParams.set("next", pathname);
-  //   return NextResponse.redirect(url);
-  // }
+  const { supabase, response } = createSupabaseServerClientForMiddleware(req);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  return NextResponse.next();
+  if (!user) {
+    const url = req.nextUrl.clone();
+    url.pathname = "/login";
+    if (pathname !== "/") url.searchParams.set("next", pathname);
+    return NextResponse.redirect(url);
+  }
+
+  return response;
 }
 
 export const config = {

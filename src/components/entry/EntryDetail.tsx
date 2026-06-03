@@ -18,7 +18,7 @@ import { parseMoods } from "@/lib/moods";
 import { formatWithWeekdayPL, formatTimePL } from "@/lib/dates";
 import { EntryForm } from "./EntryForm";
 import type { UploadedMedia } from "./media-types";
-import { deleteEntry as dbDeleteEntry } from "@/lib/db-client";
+import { deleteEntry as dbDeleteEntry } from "@/lib/db-supabase";
 
 interface Props {
   entry: {

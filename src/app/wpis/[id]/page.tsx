@@ -4,7 +4,7 @@ import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { EntryEditor } from "@/components/entry/EntryEditor";
-import { getEntry, type ClientEntry, type EntriesChangedDetail } from "@/lib/db-client";
+import { getEntry, type ClientEntry, type EntriesChangedDetail } from "@/lib/db-supabase";
 
 export default function EntryPage({
   params,

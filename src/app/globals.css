@@ -58,6 +58,156 @@
   --accent: var(--primary);
 }
 
+/* === Radius — mega (2× current) === */
+[data-radius="mega"] {
+  --radius-xs: 8px;
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-xl: 32px;
+  --radius-2xl: 48px;
+}
+
+/* === Theme: Light (czysta biel, chłodny grafit) === */
+[data-theme="light"] {
+  --surface: #ffffff;
+  --surface-container: #f4f4f5;
+  --surface-container-high: #e4e4e7;
+  --on-surface: #18181b;
+  --on-surface-variant: #52525b;
+  --on-surface-muted: #a1a1aa;
+  --primary: #18181b;
+  --on-primary: #ffffff;
+  --primary-container: #e4e4e7;
+  --on-primary-container: #18181b;
+  --secondary: #52525b;
+  --on-secondary: #ffffff;
+  --tertiary: #71717a;
+  --on-tertiary: #ffffff;
+  --destructive: #dc2626;
+  --on-destructive: #ffffff;
+  --destructive-container: #fee2e2;
+  --on-destructive-container: #991b1b;
+  --recording: #dc2626;
+  --outline: #e4e4e7;
+  --outline-variant: #d4d4d8;
+  --ring: #18181b;
+}
+
+/* === Theme: Dark === */
+[data-theme="dark"] {
+  --surface: #18181b;
+  --surface-container: #27272a;
+  --surface-container-high: #3f3f46;
+  --on-surface: #f4f4f5;
+  --on-surface-variant: #a1a1aa;
+  --on-surface-muted: #71717a;
+  --primary: #f4f4f5;
+  --on-primary: #18181b;
+  --primary-container: #3f3f46;
+  --on-primary-container: #f4f4f5;
+  --secondary: #a1a1aa;
+  --on-secondary: #18181b;
+  --tertiary: #d4d4d8;
+  --on-tertiary: #18181b;
+  --destructive: #f87171;
+  --on-destructive: #450a0a;
+  --destructive-container: #450a0a;
+  --on-destructive-container: #fca5a5;
+  --recording: #ef4444;
+  --outline: #3f3f46;
+  --outline-variant: #52525b;
+  --ring: #f4f4f5;
+  --scrim: rgb(0 0 0 / 0.7);
+  --elevation-1: 0 1px 2px rgb(0 0 0 / 0.4);
+  --elevation-2: 0 2px 8px rgb(0 0 0 / 0.5);
+  --elevation-3: 0 1px 0 rgb(0 0 0 / 0.2), 0 8px 30px -12px rgb(0 0 0 / 0.6);
+}
+
+/* === Theme: Indygo (niebiesko-fioletowy akcent) === */
+[data-theme="indigo"] {
+  --surface: #fafaff;
+  --surface-container: #f1f1fb;
+  --surface-container-high: #e7e7f7;
+  --on-surface: #1e1b4b;
+  --on-surface-variant: #4338ca;
+  --on-surface-muted: #818cf8;
+  --primary: #6366f1;
+  --on-primary: #ffffff;
+  --primary-container: #e0e7ff;
+  --on-primary-container: #312e81;
+  --secondary: #4338ca;
+  --on-secondary: #ffffff;
+  --tertiary: #8b5cf6;
+  --on-tertiary: #ffffff;
+  --outline: #e0e7ff;
+  --outline-variant: #c7d2fe;
+  --ring: #6366f1;
+}
+
+/* === Theme: Pomarańczowy === */
+[data-theme="orange"] {
+  --surface: #fffaf5;
+  --surface-container: #fff1e3;
+  --surface-container-high: #ffe4cc;
+  --on-surface: #431407;
+  --on-surface-variant: #9a3412;
+  --on-surface-muted: #c2410c;
+  --primary: #ea580c;
+  --on-primary: #ffffff;
+  --primary-container: #ffedd5;
+  --on-primary-container: #7c2d12;
+  --secondary: #c2410c;
+  --on-secondary: #ffffff;
+  --tertiary: #d97706;
+  --on-tertiary: #ffffff;
+  --outline: #fed7aa;
+  --outline-variant: #fdba74;
+  --ring: #ea580c;
+}
+
+/* === Theme: Leśny (zielony) === */
+[data-theme="forest"] {
+  --surface: #f7faf7;
+  --surface-container: #ecf5ed;
+  --surface-container-high: #d8ebdc;
+  --on-surface: #14532d;
+  --on-surface-variant: #166534;
+  --on-surface-muted: #4ade80;
+  --primary: #15803d;
+  --on-primary: #ffffff;
+  --primary-container: #dcfce7;
+  --on-primary-container: #14532d;
+  --secondary: #166534;
+  --on-secondary: #ffffff;
+  --tertiary: #65a30d;
+  --on-tertiary: #ffffff;
+  --outline: #d1fae5;
+  --outline-variant: #a7f3d0;
+  --ring: #15803d;
+}
+
+/* === Theme: Różany === */
+[data-theme="rose"] {
+  --surface: #fff7f9;
+  --surface-container: #ffeaef;
+  --surface-container-high: #fbcfe0;
+  --on-surface: #500724;
+  --on-surface-variant: #9f1239;
+  --on-surface-muted: #fb7185;
+  --primary: #e11d48;
+  --on-primary: #ffffff;
+  --primary-container: #ffe4e6;
+  --on-primary-container: #881337;
+  --secondary: #9f1239;
+  --on-secondary: #ffffff;
+  --tertiary: #db2777;
+  --on-tertiary: #ffffff;
+  --outline: #fecdd3;
+  --outline-variant: #fda4af;
+  --ring: #e11d48;
+}
+
 @theme inline {
   /* New M3 tokens */
   --color-surface: var(--surface);

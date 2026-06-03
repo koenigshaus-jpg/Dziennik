@@ -1,0 +1,420 @@
+"use client";
+
+import { getSupabaseClient } from "./supabase/client";
+
+export interface ClientMedia {
+  id: string;
+  kind: "image" | "audio";
+  path: string; // signed URL (read) lub data: URI / signed URL (write)
+  mime: string;
+  size: number;
+  storageKey?: string; // klucz w bucket 'media' (gdy plik już wgrany)
+}
+
+export interface ClientEntry {
+  id: string;
+  contentHtml: string;
+  contentText: string;
+  mood: string | null;
+  createdAt: number;
+  updatedAt: number;
+  tags: string[];
+  media: ClientMedia[];
+}
+
+export type EntriesChangedKind = "create" | "update" | "delete";
+export interface EntriesChangedDetail {
+  id: string;
+  kind: EntriesChangedKind;
+}
+
+const SIGNED_URL_TTL = 60 * 60; // 1h
+
+function emitChanged(detail: EntriesChangedDetail): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent("entries-changed", { detail }));
+}
+
+export function newId(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return Math.random().toString(36).slice(2) + Date.now().toString(36);
+}
+
+function htmlToText(html: string): string {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<\/(p|div|h[1-6]|li|br)>/gi, "\n")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+async function requireUserId(): Promise<string> {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data.user) {
+    throw new Error("Musisz być zalogowany.");
+  }
+  return data.user.id;
+}
+
+function extensionForMime(mime: string, kind: "image" | "audio"): string {
+  const map: Record<string, string> = {
+    "image/jpeg": "jpg",
+    "image/jpg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "image/gif": "gif",
+    "image/avif": "avif",
+    "audio/webm": "webm",
+    "audio/ogg": "ogg",
+    "audio/mp4": "mp4",
+    "audio/mpeg": "mp3",
+    "audio/wav": "wav",
+  };
+  return map[mime.toLowerCase()] ?? (kind === "image" ? "bin" : "webm");
+}
+
+function dataUrlToBlob(dataUrl: string): { blob: Blob; mime: string } {
+  const m = dataUrl.match(/^data:([^;]+);base64,(.*)$/);
+  if (!m) throw new Error("Nieprawidłowy data: URI.");
+  const mime = m[1];
+  const binary = atob(m[2]);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return { blob: new Blob([bytes], { type: mime }), mime };
+}
+
+async function uploadMediaItem(
+  userId: string,
+  entryId: string,
+  item: ClientMedia
+): Promise<{ storageKey: string; mime: string; size: number }> {
+  const supabase = getSupabaseClient();
+  const { blob, mime } = dataUrlToBlob(item.path);
+  const ext = extensionForMime(item.mime || mime, item.kind);
+  const storageKey = `${userId}/${entryId}/${item.id}.${ext}`;
+  const { error } = await supabase.storage
+    .from("media")
+    .upload(storageKey, blob, {
+      contentType: item.mime || mime,
+      upsert: true,
+    });
+  if (error) throw error;
+  return { storageKey, mime: item.mime || mime, size: blob.size };
+}
+
+async function deleteStorageKeys(keys: string[]): Promise<void> {
+  if (keys.length === 0) return;
+  const supabase = getSupabaseClient();
+  await supabase.storage.from("media").remove(keys);
+}
+
+async function signMedia(
+  rows: {
+    id: string;
+    kind: "image" | "audio";
+    path: string;
+    mime: string;
+    size: number;
+  }[]
+): Promise<ClientMedia[]> {
+  if (rows.length === 0) return [];
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase.storage
+    .from("media")
+    .createSignedUrls(
+      rows.map((r) => r.path),
+      SIGNED_URL_TTL
+    );
+  if (error) throw error;
+  return rows.map((r, i) => ({
+    id: r.id,
+    kind: r.kind,
+    mime: r.mime,
+    size: r.size,
+    storageKey: r.path,
+    path: data?.[i]?.signedUrl ?? "",
+  }));
+}
+
+async function upsertTags(
+  userId: string,
+  names: string[]
+): Promise<{ id: string; name: string }[]> {
+  if (names.length === 0) return [];
+  const supabase = getSupabaseClient();
+  const normalized = Array.from(new Set(names.map((n) => n.toLowerCase().trim()))).filter(
+    (n) => n.length > 0
+  );
+  if (normalized.length === 0) return [];
+  const { error: upErr } = await supabase
+    .from("tags")
+    .upsert(
+      normalized.map((name) => ({ user_id: userId, name })),
+      { onConflict: "user_id,name", ignoreDuplicates: true }
+    );
+  if (upErr) throw upErr;
+  const { data, error } = await supabase
+    .from("tags")
+    .select("id,name")
+    .eq("user_id", userId)
+    .in("name", normalized);
+  if (error) throw error;
+  return data ?? [];
+}
+
+async function setEntryTags(entryId: string, tagIds: string[]): Promise<void> {
+  const supabase = getSupabaseClient();
+  await supabase.from("entry_tags").delete().eq("entry_id", entryId);
+  if (tagIds.length > 0) {
+    const { error } = await supabase
+      .from("entry_tags")
+      .insert(tagIds.map((tag_id) => ({ entry_id: entryId, tag_id })));
+    if (error) throw error;
+  }
+}
+
+async function persistMedia(
+  userId: string,
+  entryId: string,
+  desired: ClientMedia[],
+  existing: { id: string; path: string }[]
+): Promise<void> {
+  const supabase = getSupabaseClient();
+  const desiredIds = new Set(desired.map((m) => m.id));
+  const toDelete = existing.filter((m) => !desiredIds.has(m.id));
+  if (toDelete.length > 0) {
+    await deleteStorageKeys(toDelete.map((m) => m.path));
+    await supabase
+      .from("media")
+      .delete()
+      .in(
+        "id",
+        toDelete.map((m) => m.id)
+      );
+  }
+  const existingIds = new Set(existing.map((m) => m.id));
+  for (const m of desired) {
+    if (existingIds.has(m.id)) continue;
+    const { storageKey, mime, size } = await uploadMediaItem(userId, entryId, m);
+    const { error } = await supabase.from("media").insert({
+      id: m.id,
+      entry_id: entryId,
+      user_id: userId,
+      kind: m.kind,
+      path: storageKey,
+      mime,
+      size,
+    });
+    if (error) throw error;
+  }
+}
+
+export async function createEntry(input: {
+  contentHtml: string;
+  mood: string | null;
+  createdAt: Date;
+  tags: string[];
+  media: ClientMedia[];
+}): Promise<string> {
+  const userId = await requireUserId();
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("entries")
+    .insert({
+      user_id: userId,
+      content_html: input.contentHtml,
+      content_text: htmlToText(input.contentHtml),
+      mood: input.mood,
+      created_at: input.createdAt.toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .select("id")
+    .single();
+  if (error || !data) throw error ?? new Error("Nie udało się utworzyć wpisu.");
+  const id = data.id as string;
+
+  const tagRows = await upsertTags(userId, input.tags);
+  await setEntryTags(id, tagRows.map((t) => t.id));
+  await persistMedia(userId, id, input.media, []);
+
+  emitChanged({ id, kind: "create" });
+  return id;
+}
+
+export async function updateEntry(
+  id: string,
+  input: {
+    contentHtml: string;
+    mood: string | null;
+    createdAt: Date;
+    tags: string[];
+    media: ClientMedia[];
+  }
+): Promise<void> {
+  const userId = await requireUserId();
+  const supabase = getSupabaseClient();
+  const { error: upErr } = await supabase
+    .from("entries")
+    .update({
+      content_html: input.contentHtml,
+      content_text: htmlToText(input.contentHtml),
+      mood: input.mood,
+      created_at: input.createdAt.toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id);
+  if (upErr) throw upErr;
+
+  const tagRows = await upsertTags(userId, input.tags);
+  await setEntryTags(id, tagRows.map((t) => t.id));
+
+  const { data: existingMedia, error: emErr } = await supabase
+    .from("media")
+    .select("id,path")
+    .eq("entry_id", id);
+  if (emErr) throw emErr;
+  await persistMedia(userId, id, input.media, existingMedia ?? []);
+
+  emitChanged({ id, kind: "update" });
+}
+
+export async function deleteEntry(id: string): Promise<void> {
+  const supabase = getSupabaseClient();
+  const { data: mediaRows } = await supabase
+    .from("media")
+    .select("path")
+    .eq("entry_id", id);
+  if (mediaRows && mediaRows.length > 0) {
+    await deleteStorageKeys(
+      (mediaRows as { path: string }[]).map((m) => m.path)
+    );
+  }
+  const { error } = await supabase.from("entries").delete().eq("id", id);
+  if (error) throw error;
+  emitChanged({ id, kind: "delete" });
+}
+
+type RawEntry = {
+  id: string;
+  content_html: string;
+  content_text: string;
+  mood: string | null;
+  created_at: string;
+  updated_at: string;
+  entry_tags: { tags: { name: string } | null }[] | null;
+  media: {
+    id: string;
+    kind: "image" | "audio";
+    path: string;
+    mime: string;
+    size: number;
+  }[] | null;
+};
+
+const ENTRY_SELECT =
+  "id,content_html,content_text,mood,created_at,updated_at,entry_tags(tags(name)),media(id,kind,path,mime,size)";
+
+async function mapEntry(row: RawEntry): Promise<ClientEntry> {
+  const tags = (row.entry_tags ?? [])
+    .map((et) => et.tags?.name)
+    .filter((n): n is string => !!n);
+  const media = await signMedia(row.media ?? []);
+  return {
+    id: row.id,
+    contentHtml: row.content_html,
+    contentText: row.content_text,
+    mood: row.mood,
+    createdAt: new Date(row.created_at).getTime(),
+    updatedAt: new Date(row.updated_at).getTime(),
+    tags,
+    media,
+  };
+}
+
+export async function getEntry(id: string): Promise<ClientEntry | null> {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("entries")
+    .select(ENTRY_SELECT)
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return mapEntry(data as unknown as RawEntry);
+}
+
+export async function listEntries(opts?: {
+  q?: string;
+  tag?: string;
+  from?: number;
+  to?: number;
+  moods?: string[];
+}): Promise<ClientEntry[]> {
+  const supabase = getSupabaseClient();
+  let query = supabase
+    .from("entries")
+    .select(ENTRY_SELECT)
+    .order("created_at", { ascending: false });
+
+  if (opts?.q) {
+    query = query.ilike("content_text", `%${opts.q}%`);
+  }
+  if (opts?.from != null) {
+    query = query.gte("created_at", new Date(opts.from).toISOString());
+  }
+  if (opts?.to != null) {
+    query = query.lte("created_at", new Date(opts.to).toISOString());
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  let rows = (data ?? []) as unknown as RawEntry[];
+
+  if (opts?.tag) {
+    const t = opts.tag.toLowerCase();
+    rows = rows.filter((r) =>
+      (r.entry_tags ?? []).some((et) => et.tags?.name === t)
+    );
+  }
+  if (opts?.moods && opts.moods.length > 0) {
+    const set = new Set(opts.moods);
+    rows = rows.filter((r) => {
+      if (!r.mood) return false;
+      return r.mood.split(",").some((k) => set.has(k.trim()));
+    });
+  }
+
+  const out: ClientEntry[] = [];
+  for (const r of rows) out.push(await mapEntry(r));
+  return out;
+}
+
+export async function listAllTagsWithCount(): Promise<
+  { name: string; count: number }[]
+> {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("tags")
+    .select("name,entry_tags(entry_id)");
+  if (error) throw error;
+  const rows = (data ?? []) as unknown as {
+    name: string;
+    entry_tags: unknown[] | null;
+  }[];
+  return rows
+    .map((t) => ({ name: t.name, count: t.entry_tags?.length ?? 0 }))
+    .filter((t) => t.count > 0)
+    .sort((a, b) => b.count - a.count);
+}

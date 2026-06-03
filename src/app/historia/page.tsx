@@ -8,7 +8,7 @@ import {
   listEntries,
   listAllTagsWithCount,
   type ClientEntry,
-} from "@/lib/db-client";
+} from "@/lib/db-supabase";
 import { formatLongPL, formatTimePL } from "@/lib/dates";
 import { snippet } from "@/lib/text";
 import { parseMoods, MOODS } from "@/lib/moods";

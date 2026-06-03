@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { formatWithWeekdayPL, formatTimePL } from "@/lib/dates";
-import { deleteEntry, getEntry, type ClientEntry } from "@/lib/db-client";
+import { deleteEntry, getEntry, type ClientEntry } from "@/lib/db-supabase";
 import { EntryForm, type EntryFormHandle } from "./EntryForm";
 
 interface Props {

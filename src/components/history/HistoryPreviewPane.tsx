@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { BookOpen } from "lucide-react";
-import { getEntry, type ClientEntry, type EntriesChangedDetail } from "@/lib/db-client";
+import { getEntry, type ClientEntry, type EntriesChangedDetail } from "@/lib/db-supabase";
 import { EntryEditor } from "@/components/entry/EntryEditor";
 
 export function HistoryPreviewPane({ selectedId }: { selectedId: string | null }) {

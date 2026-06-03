@@ -30,7 +30,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MOOD_BY_KEY, serializeMoods, parseMoods } from "@/lib/moods";
-import { createEntry, updateEntry, newId } from "@/lib/db-client";
+import { createEntry, updateEntry, newId } from "@/lib/db-supabase";
 import { compressImage } from "@/lib/clientImage";
 import { blobToDataUrl } from "@/lib/clientMedia";
 
