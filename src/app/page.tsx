@@ -27,8 +27,8 @@ import { HistoryPreviewPane } from "@/components/history/HistoryPreviewPane";
 import { MobileHeader } from "@/components/mobile/MobileHeader";
 import { DateStrip } from "@/components/mobile/DateStrip";
 import { MobileEntryList } from "@/components/mobile/MobileEntryList";
-import { ComposerBar, type ComposerBarHandle } from "@/components/mobile/ComposerBar";
-import { DayNavBar } from "@/components/mobile/DayNavBar";
+import { ComposerBar } from "@/components/mobile/ComposerBar";
+import { MicFab } from "@/components/mobile/MicFab";
 import { APP_VERSION } from "@/lib/version";
 
 const BASE_BACK_DAYS = 5;
@@ -111,17 +111,8 @@ function HomePageInner() {
   const rangeStartIso = useMemo(() => toIsoLocalDate(windowStart), [windowStart]);
   const rangeEndIso = useMemo(() => toIsoLocalDate(windowEnd), [windowEnd]);
 
-  // Composer ref — empty state mic dzwoni do startDictation
-  const composerRef = useRef<ComposerBarHandle | null>(null);
-  const [composerRecording, setComposerRecording] = useState(false);
-
-  const handleMicTap = useCallback(() => {
-    if (composerRecording) {
-      composerRef.current?.stopDictation();
-    } else {
-      composerRef.current?.startDictation();
-    }
-  }, [composerRecording]);
+  // Swipe gesture state — touch + pointer
+  const swipeStartRef = useRef<{ x: number; y: number } | null>(null);
 
   // Stan
   const [entries, setEntries] = useState<ClientEntry[] | null>(null);

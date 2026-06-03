@@ -174,6 +174,29 @@ export const ComposerBar = React.forwardRef<ComposerBarHandle, Props>(
 
     const showSend = value.trim().length > 0 || attachments.length > 0;
 
+    // Mobile variant — uproszczony: tylko textarea jako placeholder dla
+    // zapytań AI. Bez mic, paperclip, send. Wpisy tworzymy przez MicFab.
+    if (variant === "mobile") {
+      return (
+        <div className={containerClass}>
+          <textarea
+            ref={inputRef}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                toast.message("Zapytania do AI — wkrótce.");
+              }
+            }}
+            placeholder="Zapytaj asystenta… (wkrótce)"
+            rows={1}
+            className="w-full resize-none bg-foreground/[0.04] border-0 outline-none focus:ring-0 rounded-2xl text-sm leading-6 py-2.5 px-4 placeholder:text-muted/70"
+          />
+        </div>
+      );
+    }
+
     return (
       <div className={containerClass}>
         <input

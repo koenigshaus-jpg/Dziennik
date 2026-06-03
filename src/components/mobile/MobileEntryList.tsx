@@ -13,12 +13,7 @@ interface Props {
   onMicTap?: () => void;
 }
 
-export function MobileEntryList({
-  entries,
-  selectedDay,
-  recording = false,
-  onMicTap,
-}: Props) {
+export function MobileEntryList({ entries, selectedDay }: Props) {
   const date = React.useMemo(
     () => parseIsoLocalDate(selectedDay) ?? new Date(),
     [selectedDay]
@@ -46,7 +41,7 @@ export function MobileEntryList({
         )}
       </header>
       {dayEntries.length === 0 ? (
-        <MobileEmptyDay recording={recording} onMicTap={onMicTap} />
+        <MobileEmptyDay />
       ) : (
         <div className="flex flex-col gap-2">
           {dayEntries.map((e) => (

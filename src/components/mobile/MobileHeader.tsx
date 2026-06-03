@@ -22,6 +22,7 @@ export function MobileHeader({
   const today = React.useMemo(() => toIsoLocalDate(new Date()), []);
   const calendarSelected = selectedDay ?? today;
   const counts = entryCountsByDay ?? new Map<string, number>();
+  const isToday = calendarSelected === today;
 
   return (
     <>
@@ -37,14 +38,26 @@ export function MobileHeader({
         <div className="text-sm font-semibold tracking-wide select-none">
           Dziennik
         </div>
-        <button
-          type="button"
-          onClick={() => setCalendarOpen(true)}
-          className="inline-flex h-10 w-10 items-center justify-center rounded-full hover:bg-foreground/5"
-          aria-label="Otwórz kalendarz"
-        >
-          <CalendarDays className="h-5 w-5" />
-        </button>
+        <div className="flex items-center gap-1">
+          {!isToday && (
+            <button
+              type="button"
+              onClick={() => onSelectDay?.(today)}
+              className="inline-flex h-8 items-center justify-center px-3 rounded-full border border-border text-xs font-medium hover:bg-foreground/5 transition-colors"
+              aria-label="Wróć do dzisiaj"
+            >
+              Dziś
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setCalendarOpen(true)}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full hover:bg-foreground/5"
+            aria-label="Otwórz kalendarz"
+          >
+            <CalendarDays className="h-5 w-5" />
+          </button>
+        </div>
       </header>
       <HamburgerDrawer open={menuOpen} onOpenChange={setMenuOpen} />
       <CalendarSheet
