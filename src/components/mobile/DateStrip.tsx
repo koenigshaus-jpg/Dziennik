@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { addDays, formatDayShortPL, isSameLocalDay, parseIsoLocalDate, toIsoLocalDate } from "@/lib/dates";
+import { addDays, formatDayShortPL, isSameLocalDay, toIsoLocalDate } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -19,8 +19,6 @@ export function DateStrip({
   windowStart,
   windowEnd,
 }: Props) {
-  const scrollerRef = React.useRef<HTMLDivElement | null>(null);
-  const itemRefs = React.useRef<Map<string, HTMLButtonElement>>(new Map());
   const today = React.useMemo(() => new Date(), []);
 
   const days = React.useMemo(() => {
@@ -33,67 +31,8 @@ export function DateStrip({
     return out;
   }, [windowStart, windowEnd]);
 
-  // Centruje selected day. Smooth dla user-triggered, instant przy initial.
-  const didInitialCenterRef = React.useRef(false);
-  const selectedDayRef = React.useRef(selectedDay);
-  React.useEffect(() => {
-    selectedDayRef.current = selectedDay;
-  }, [selectedDay]);
-
-  // Stabilny callback — nie zależy od selectedDay (czyta z refa)
-  const centerNow = React.useCallback((smooth: boolean) => {
-    const day = selectedDayRef.current;
-    const el = itemRefs.current.get(day);
-    const scroller = scrollerRef.current;
-    if (!el || !scroller || scroller.clientWidth === 0 || el.clientWidth === 0)
-      return false;
-    const target = Math.max(
-      0,
-      el.offsetLeft - scroller.clientWidth / 2 + el.clientWidth / 2
-    );
-    if (smooth) {
-      scroller.scrollTo({ left: target, behavior: "smooth" });
-    } else {
-      scroller.scrollLeft = target;
-    }
-    return true;
-  }, []);
-
-  // Reakcja na zmianę selectedDay — single smooth scroll
-  React.useLayoutEffect(() => {
-    const smooth = didInitialCenterRef.current;
-    if (centerNow(smooth)) {
-      didInitialCenterRef.current = true;
-    }
-  }, [selectedDay, centerNow]);
-
-  // Initial mount: ResizeObserver + fallback timeouty (uruchamiane RAZ,
-  // bo deps puste — refs zapewniają dostęp do aktualnego selectedDay).
-  React.useEffect(() => {
-    const scroller = scrollerRef.current;
-    if (!scroller) return;
-    const ro = new ResizeObserver(() => {
-      if (centerNow(didInitialCenterRef.current)) {
-        didInitialCenterRef.current = true;
-      }
-    });
-    ro.observe(scroller);
-    const timers = [
-      window.setTimeout(() => centerNow(false), 200),
-      window.setTimeout(() => centerNow(false), 600),
-    ];
-    return () => {
-      ro.disconnect();
-      timers.forEach((t) => window.clearTimeout(t));
-    };
-  }, [centerNow]);
-
   return (
-    <div
-      ref={scrollerRef}
-      className="lg:hidden sticky top-12 z-20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border overflow-x-auto no-scrollbar"
-      style={{ WebkitOverflowScrolling: "touch" }}
-    >
+    <div className="lg:hidden sticky top-12 z-20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border overflow-x-auto no-scrollbar">
       <div className="flex gap-2 px-3 py-2 min-w-max">
         {days.map((d) => {
           const iso = toIsoLocalDate(d);
@@ -103,10 +42,6 @@ export function DateStrip({
           return (
             <button
               key={iso}
-              ref={(el) => {
-                if (el) itemRefs.current.set(iso, el);
-                else itemRefs.current.delete(iso);
-              }}
               type="button"
               onClick={() => onSelectDay(iso)}
               className={cn(
@@ -149,26 +84,4 @@ export function DateStrip({
       </div>
     </div>
   );
-}
-
-// Helper: pure-function for callers
-export function buildWindow(today: Date, daysBack: number, daysAhead: number) {
-  return {
-    start: addDays(today, -daysBack),
-    end: addDays(today, daysAhead),
-  };
-}
-
-// Util: parse and clamp ISO to window — exported for /page.tsx usage
-export function clampToWindow(
-  iso: string | null,
-  todayIso: string,
-  windowStart: Date,
-  windowEnd: Date
-): string {
-  if (!iso) return todayIso;
-  const d = parseIsoLocalDate(iso);
-  if (!d) return todayIso;
-  if (d < windowStart || d > windowEnd) return todayIso;
-  return iso;
 }

@@ -43,9 +43,9 @@ export function MobileEntryList({ entries, selectedDay }: Props) {
       {dayEntries.length === 0 ? (
         <MobileEmptyDay />
       ) : (
-        <div className="flex flex-col gap-2">
-          {dayEntries.map((e) => (
-            <MobileEntryCard key={e.id} entry={e} />
+        <div className="flex flex-col">
+          {dayEntries.map((e, idx) => (
+            <MobileEntryCard key={e.id} entry={e} first={idx === 0} />
           ))}
         </div>
       )}
