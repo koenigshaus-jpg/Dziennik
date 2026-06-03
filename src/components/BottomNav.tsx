@@ -5,7 +5,8 @@ import { usePathname } from "next/navigation";
 import { PenLine, Book } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export function BottomNav() {
+export function BottomNav(_props: { wide?: boolean } = {}) {
+  void _props;
   const pathname = usePathname();
 
   const items = [
