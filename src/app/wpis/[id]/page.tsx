@@ -54,10 +54,10 @@ export default function EntryPage({
       <AppShell>
         <p className="text-muted">Nie znaleziono wpisu.</p>
         <button
-          onClick={() => router.push("/historia")}
+          onClick={() => router.push("/")}
           className="mt-4 underline"
         >
-          Wróć do historii
+          Wróć do dziennika
         </button>
       </AppShell>
     );
@@ -68,7 +68,7 @@ export default function EntryPage({
       <EntryEditor
         entry={entry}
         onUpdated={(fresh) => setEntry(fresh)}
-        onDeleted={() => router.push("/historia")}
+        onDeleted={() => router.push("/")}
       />
     </AppShell>
   );

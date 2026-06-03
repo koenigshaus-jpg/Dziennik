@@ -33,6 +33,7 @@ import { MOOD_BY_KEY, serializeMoods, parseMoods } from "@/lib/moods";
 import { createEntry, updateEntry, newId } from "@/lib/db-supabase";
 import { compressImage } from "@/lib/clientImage";
 import { blobToDataUrl } from "@/lib/clientMedia";
+import { useStt } from "@/lib/useStt";
 
 type PanelKey = "mood" | "tags" | "date" | null;
 
@@ -128,108 +129,17 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
   const timerRef = useRef<number | null>(null);
   const startedAtRef = useRef<number>(0);
 
-  // speech-to-text
-  const STT_MAX_SECONDS = 60;
+  // speech-to-text (via shared hook)
   const editorRef = useRef<EditorHandle>(null);
-  const [sttRecording, setSttRecording] = useState(false);
-  const [sttElapsed, setSttElapsed] = useState(0);
-  const [sttProcessing, setSttProcessing] = useState(false);
-  const sttRecorderRef = useRef<MediaRecorder | null>(null);
-  const sttChunksRef = useRef<Blob[]>([]);
-  const sttTimerRef = useRef<number | null>(null);
-  const sttStartedAtRef = useRef<number>(0);
-  const sttAutoStopRef = useRef<number | null>(null);
-
-  async function startStt() {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mr = new MediaRecorder(stream, { audioBitsPerSecond: 32000 });
-      sttRecorderRef.current = mr;
-      sttChunksRef.current = [];
-      mr.ondataavailable = (e) => {
-        if (e.data.size > 0) sttChunksRef.current.push(e.data);
-      };
-      mr.onstop = async () => {
-        stream.getTracks().forEach((t) => t.stop());
-        const mime = mr.mimeType || "audio/webm";
-        const blob = new Blob(sttChunksRef.current, { type: mime });
-        setSttProcessing(true);
-        try {
-          const ext = mime.includes("ogg")
-            ? "ogg"
-            : mime.includes("mp4")
-            ? "mp4"
-            : "webm";
-          const file = new File([blob], `voice.${ext}`, { type: blob.type });
-          const fd = new FormData();
-          fd.append("file", file);
-          const res = await fetch("/api/transcribe", {
-            method: "POST",
-            body: fd,
-          });
-          if (!res.ok) {
-            const err = (await res.json().catch(() => null)) as {
-              error?: string;
-            } | null;
-            throw new Error(err?.error || "Transkrypcja nie powiodła się.");
-          }
-          const data = (await res.json()) as { text?: string };
-          const text = (data.text || "").trim();
-          if (!text) {
-            toast.message("Nie wykryto mowy.");
-          } else {
-            editorRef.current?.insertText(text);
-          }
-        } catch (e) {
-          console.error(e);
-          toast.error(
-            e instanceof Error ? e.message : "Transkrypcja nie powiodła się."
-          );
-        } finally {
-          setSttProcessing(false);
-        }
-      };
-      mr.start();
-      sttStartedAtRef.current = Date.now();
-      setSttElapsed(0);
-      sttTimerRef.current = window.setInterval(() => {
-        setSttElapsed((Date.now() - sttStartedAtRef.current) / 1000);
-      }, 250);
-      sttAutoStopRef.current = window.setTimeout(() => {
-        toast.message(`Osiągnięto limit ${STT_MAX_SECONDS}s.`);
-        stopStt();
-      }, STT_MAX_SECONDS * 1000);
-      setSttRecording(true);
-    } catch (e) {
-      toast.error("Nie udało się włączyć mikrofonu.");
-      console.error(e);
-    }
-  }
-
-  function stopStt() {
-    sttRecorderRef.current?.stop();
-    if (sttTimerRef.current) {
-      window.clearInterval(sttTimerRef.current);
-      sttTimerRef.current = null;
-    }
-    if (sttAutoStopRef.current) {
-      window.clearTimeout(sttAutoStopRef.current);
-      sttAutoStopRef.current = null;
-    }
-    setSttRecording(false);
-  }
-
-  useEffect(() => {
-    return () => {
-      if (sttTimerRef.current) window.clearInterval(sttTimerRef.current);
-      if (sttAutoStopRef.current) window.clearTimeout(sttAutoStopRef.current);
-      if (sttRecorderRef.current && sttRecorderRef.current.state !== "inactive") {
-        try {
-          sttRecorderRef.current.stop();
-        } catch {}
-      }
-    };
-  }, []);
+  const {
+    recording: sttRecording,
+    processing: sttProcessing,
+    elapsed: sttElapsed,
+    start: startStt,
+    stop: stopStt,
+  } = useStt({
+    onTranscript: (text) => editorRef.current?.insertText(text),
+  });
 
   function togglePanel(key: NonNullable<PanelKey>) {
     setOpenPanel((curr) => (curr === key ? null : key));
@@ -342,7 +252,7 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
           const isDesktop =
             typeof window !== "undefined" &&
             window.matchMedia("(min-width: 1024px)").matches;
-          router.push(isDesktop ? `/historia?id=${id}` : `/wpis/${id}`);
+          router.push(isDesktop ? `/?id=${id}` : `/wpis/${id}`);
         }
       } else {
         await updateEntry(initial!.id, {
@@ -619,7 +529,7 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
         className={cn(
           "flex flex-col gap-3",
           bare
-            ? "lg:hidden fixed bottom-14 left-0 right-0 z-30 bg-background border-t border-border px-4 pt-3 pb-4"
+            ? "lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-background border-t border-border px-4 pt-3 pb-4"
             : ""
         )}
       >

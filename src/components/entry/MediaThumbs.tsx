@@ -21,7 +21,8 @@ import { Button } from "@/components/ui/button";
 
 interface Props {
   value: UploadedMedia[];
-  onRemove: (id: string) => void;
+  onRemove?: (id: string) => void;
+  readOnly?: boolean;
 }
 
 function extFromMime(mime: string): string {
@@ -40,7 +41,7 @@ function downloadMedia(m: UploadedMedia) {
   a.remove();
 }
 
-export function MediaThumbs({ value, onRemove }: Props) {
+export function MediaThumbs({ value, onRemove, readOnly = false }: Props) {
   const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
 
@@ -95,72 +96,76 @@ export function MediaThumbs({ value, onRemove }: Props) {
                 className="max-w-full max-h-full object-contain"
               />
             </button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  onClick={(e) => e.stopPropagation()}
-                  className="absolute top-1 right-1 bg-white/90 text-foreground rounded-full p-1 shadow-sm ring-1 ring-black/5 z-10 hover:bg-foreground/5"
-                  aria-label="Menu zdjęcia"
-                >
-                  <MoreVertical className="h-3.5 w-3.5" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem
-                  onSelect={(e) => {
-                    e.preventDefault();
-                    downloadMedia(m);
-                  }}
-                >
-                  <Download className="h-4 w-4" />
-                  Pobierz
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onSelect={(e) => {
-                    e.preventDefault();
-                    setConfirmId(m.id);
-                  }}
-                  className="text-destructive focus:text-destructive"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Usuń
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {!readOnly && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={(e) => e.stopPropagation()}
+                    className="absolute top-1 right-1 bg-white/90 text-foreground rounded-full p-1 shadow-sm ring-1 ring-black/5 z-10 hover:bg-foreground/5"
+                    aria-label="Menu zdjęcia"
+                  >
+                    <MoreVertical className="h-3.5 w-3.5" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      downloadMedia(m);
+                    }}
+                  >
+                    <Download className="h-4 w-4" />
+                    Pobierz
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={(e) => {
+                      e.preventDefault();
+                      setConfirmId(m.id);
+                    }}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Usuń
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
         ))}
       </div>
 
-      <Dialog
-        open={confirmTarget !== null}
-        onOpenChange={(open) => {
-          if (!open) setConfirmId(null);
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Usunąć zdjęcie?</DialogTitle>
-            <DialogDescription>
-              Tej operacji nie da się cofnąć. Zdjęcie zostanie usunięte z wpisu.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex justify-end gap-2 mt-4">
-            <DialogClose asChild>
-              <Button variant="outline">Anuluj</Button>
-            </DialogClose>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                if (confirmId) onRemove(confirmId);
-                setConfirmId(null);
-              }}
-            >
-              Usuń
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {!readOnly && (
+        <Dialog
+          open={confirmTarget !== null}
+          onOpenChange={(open) => {
+            if (!open) setConfirmId(null);
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Usunąć zdjęcie?</DialogTitle>
+              <DialogDescription>
+                Tej operacji nie da się cofnąć. Zdjęcie zostanie usunięte z wpisu.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex justify-end gap-2 mt-4">
+              <DialogClose asChild>
+                <Button variant="outline">Anuluj</Button>
+              </DialogClose>
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  if (confirmId && onRemove) onRemove(confirmId);
+                  setConfirmId(null);
+                }}
+              >
+                Usuń
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {current && (
         <div

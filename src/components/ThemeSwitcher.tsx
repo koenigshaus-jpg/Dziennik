@@ -11,13 +11,13 @@ const RADIUS_OPTIONS: { id: RadiusMode; label: string }[] = [
   { id: "mega", label: "Mega (2×)" },
 ];
 
-export function ThemeSwitcher() {
+export function ThemeSwitcher({ embedded = false }: { embedded?: boolean }) {
   const { theme, radius, setTheme, setRadius } = useTheme();
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || embedded) return;
     function onDown(e: MouseEvent) {
       if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
         setOpen(false);
@@ -32,12 +32,70 @@ export function ThemeSwitcher() {
       window.removeEventListener("mousedown", onDown);
       window.removeEventListener("keydown", onKey);
     };
-  }, [open]);
+  }, [open, embedded]);
+
+  if (embedded) {
+    return (
+      <div className="rounded-xl border border-outline bg-surface-container p-3">
+        <p className="text-xs uppercase tracking-wider text-on-surface-variant mb-2">
+          Motyw
+        </p>
+        <div className="grid grid-cols-2 gap-2 mb-4">
+          {THEMES.map((t) => {
+            const active = t.id === theme;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setTheme(t.id)}
+                className={cn(
+                  "flex items-center gap-2 h-9 px-2.5 rounded-full border text-sm transition-colors",
+                  active
+                    ? "border-primary bg-primary-container text-on-primary-container"
+                    : "border-outline text-on-surface hover:bg-on-surface/5"
+                )}
+              >
+                <span
+                  aria-hidden
+                  className="h-4 w-4 rounded-full border border-outline-variant"
+                  style={{ background: t.swatch }}
+                />
+                <span className="truncate">{t.label}</span>
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-xs uppercase tracking-wider text-on-surface-variant mb-2">
+          Zaokrąglenia
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          {RADIUS_OPTIONS.map((r) => {
+            const active = r.id === radius;
+            return (
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => setRadius(r.id)}
+                className={cn(
+                  "h-9 px-3 rounded-full border text-sm transition-colors",
+                  active
+                    ? "border-primary bg-primary-container text-on-primary-container"
+                    : "border-outline text-on-surface hover:bg-on-surface/5"
+                )}
+              >
+                {r.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
       ref={panelRef}
-      className="fixed z-50 bottom-20 right-4 lg:bottom-4 lg:right-4"
+      className="hidden lg:flex fixed z-50 bottom-4 right-4"
     >
       {open && (
         <div

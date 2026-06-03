@@ -1,4 +1,3 @@
-import { BottomNav } from "./BottomNav";
 import { TopNav } from "./TopNav";
 
 export function AppShell({
@@ -20,7 +19,6 @@ export function AppShell({
       >
         {children}
       </div>
-      <BottomNav />
     </>
   );
 }
