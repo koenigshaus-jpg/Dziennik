@@ -108,6 +108,26 @@ function HomePageInner() {
   }, [windowEnd, selectedDayDate]);
 
   const [stripScrollTrigger, setStripScrollTrigger] = useState(0);
+  const [stripScrollTarget, setStripScrollTarget] = useState<string>(
+    () => selectedDay
+  );
+  const [stripScrollBehavior, setStripScrollBehavior] = useState<
+    "smooth" | "auto"
+  >("auto");
+
+  // Initial mount: jeśli selectedDay ≠ today, ustaw strip na ten dzień
+  // INSTANT (bez animacji) — powrót z edycji wpisu ma być w pozycji końcowej.
+  const didInitialScrollRef = useRef(false);
+  useEffect(() => {
+    if (didInitialScrollRef.current) return;
+    didInitialScrollRef.current = true;
+    if (selectedDay !== todayIso) {
+      setStripScrollBehavior("auto");
+      setStripScrollTarget(selectedDay);
+      setStripScrollTrigger((c) => c + 1);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
 
   // Stan
@@ -584,8 +604,8 @@ function HomePageInner() {
         onSelectDay={setSelectedDay}
         onGoToday={() => {
           setSelectedDay(todayIso);
-          // Inkrement counter — useEffect w DateStripie strzela scroll
-          // do today PO renderze z nowym oknem (z retry loop).
+          setStripScrollBehavior("smooth");
+          setStripScrollTarget(todayIso);
           setStripScrollTrigger((c) => c + 1);
         }}
         entryCountsByDay={entryCountsByDay}
@@ -597,7 +617,8 @@ function HomePageInner() {
         windowStart={windowStart}
         windowEnd={windowEnd}
         scrollTrigger={stripScrollTrigger}
-        scrollTarget={todayIso}
+        scrollTarget={stripScrollTarget}
+        scrollBehavior={stripScrollBehavior}
       />
       <div className="flex-1">
         {windowEntries === null ? (

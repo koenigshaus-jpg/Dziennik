@@ -15,6 +15,9 @@ interface Props {
   scrollTrigger?: number;
   /** Dzień do scrolla gdy scrollTrigger się zmienia. */
   scrollTarget?: string;
+  /** "smooth" = płynna animacja (np. klik "Dziś"), "auto" = instant
+   *  (np. initial mount po powrocie z edycji). Default "smooth". */
+  scrollBehavior?: "smooth" | "auto";
 }
 
 export function DateStrip({
@@ -25,6 +28,7 @@ export function DateStrip({
   windowEnd,
   scrollTrigger = 0,
   scrollTarget,
+  scrollBehavior = "smooth",
 }: Props) {
   const scrollerRef = React.useRef<HTMLDivElement | null>(null);
   const itemRefs = React.useRef<Map<string, HTMLButtonElement>>(new Map());
@@ -53,7 +57,7 @@ export function DateStrip({
         0,
         el.offsetLeft - scroller.clientWidth / 2 + el.clientWidth / 2
       );
-      scroller.scrollTo({ left: target, behavior: "smooth" });
+      scroller.scrollTo({ left: target, behavior: scrollBehavior });
     };
     const timers = [
       window.setTimeout(scrollOnce, 0),
@@ -61,7 +65,7 @@ export function DateStrip({
       window.setTimeout(scrollOnce, 600),
     ];
     return () => timers.forEach((t) => window.clearTimeout(t));
-  }, [scrollTrigger, scrollTarget]);
+  }, [scrollTrigger, scrollTarget, scrollBehavior]);
 
     return (
       <div
