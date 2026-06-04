@@ -4,7 +4,7 @@ import * as React from "react";
 import { Mic, Square, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { createEntry } from "@/lib/db-supabase";
-import { parseIsoLocalDate, isSameLocalDay } from "@/lib/dates";
+import { createdAtForDay } from "@/lib/dates";
 import { useStt } from "@/lib/useStt";
 import { cn } from "@/lib/utils";
 
@@ -19,14 +19,6 @@ function escapeHtml(s: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
-}
-
-function createdAtForDay(iso: string): Date {
-  const day = parseIsoLocalDate(iso);
-  if (!day) return new Date();
-  if (isSameLocalDay(day, new Date())) return new Date();
-  day.setHours(12, 0, 0, 0);
-  return day;
 }
 
 export function MicFab({ selectedDay }: Props) {

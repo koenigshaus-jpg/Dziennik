@@ -25,11 +25,11 @@ export function HamburgerDrawer({ open, onOpenChange }: Props) {
         />
         <DialogPrimitive.Content
           className={cn(
-            "fixed left-0 top-0 z-50 h-full w-72 max-w-[85vw]",
-            "bg-background border-r border-border shadow-2xl",
+            "fixed right-0 top-0 z-50 h-full w-72 max-w-[85vw]",
+            "bg-background border-l border-border shadow-2xl",
             "flex flex-col",
-            "data-[state=open]:animate-in data-[state=open]:slide-in-from-left",
-            "data-[state=closed]:animate-out data-[state=closed]:slide-out-to-left"
+            "data-[state=open]:animate-in data-[state=open]:slide-in-from-right",
+            "data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right"
           )}
         >
           <div className="flex items-center justify-between px-4 h-12 border-b border-border">

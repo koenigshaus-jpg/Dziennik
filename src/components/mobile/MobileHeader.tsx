@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { CalendarDays, Menu } from "lucide-react";
+import { CalendarDays, Settings } from "lucide-react";
 import { HamburgerDrawer } from "./HamburgerDrawer";
 import { CalendarSheet } from "./CalendarSheet";
 import { toIsoLocalDate } from "@/lib/dates";
@@ -30,16 +30,8 @@ export function MobileHeader({
 
   return (
     <>
-      <header className="lg:hidden sticky top-0 z-30 h-12 flex items-center justify-between px-2 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-        <button
-          type="button"
-          onClick={() => setMenuOpen(true)}
-          className="inline-flex h-10 w-10 items-center justify-center rounded-full hover:bg-foreground/5"
-          aria-label="Otwórz menu"
-        >
-          <Menu className="h-5 w-5" />
-        </button>
-        <div className="text-sm font-semibold tracking-wide select-none">
+      <header className="lg:hidden sticky top-0 z-30 h-14 flex items-center justify-between px-3 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+        <div className="font-display text-base font-bold tracking-tight select-none">
           Dziennik
         </div>
         <div className="flex items-center gap-1">
@@ -47,7 +39,7 @@ export function MobileHeader({
             <button
               type="button"
               onClick={() => onGoToday?.()}
-              className="inline-flex h-8 items-center justify-center px-3 rounded-full border border-border text-xs font-medium hover:bg-foreground/5 transition-colors"
+              className="inline-flex h-9 items-center justify-center px-3.5 rounded-full border border-border text-sm font-medium hover:bg-foreground/5 transition-colors"
               aria-label="Wróć do dzisiaj"
             >
               Dziś
@@ -56,10 +48,18 @@ export function MobileHeader({
           <button
             type="button"
             onClick={() => setCalendarOpen(true)}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full hover:bg-foreground/5"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-full hover:bg-foreground/5"
             aria-label="Otwórz kalendarz"
           >
-            <CalendarDays className="h-5 w-5" />
+            <CalendarDays className="h-6 w-6" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setMenuOpen(true)}
+            className="inline-flex h-11 w-11 items-center justify-center rounded-full hover:bg-foreground/5"
+            aria-label="Otwórz menu"
+          >
+            <Settings className="h-6 w-6" />
           </button>
         </div>
       </header>

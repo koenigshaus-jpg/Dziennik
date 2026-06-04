@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { useRouter, useSearchParams } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import {
+  createEntry,
   listEntries,
   listAllTagsWithCount,
   type ClientEntry,
@@ -20,10 +21,12 @@ import {
 } from "@/lib/dates";
 import { snippet } from "@/lib/text";
 import { parseMoods, MOODS } from "@/lib/moods";
-import { Image as ImageIcon, Mic, Search, X, Filter } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { Image as ImageIcon, Mic, X } from "lucide-react";
+import { toast } from "sonner";
 import { HistorySplit } from "@/components/history/HistorySplit";
 import { HistoryPreviewPane } from "@/components/history/HistoryPreviewPane";
+import { DesktopTopBar } from "@/components/history/DesktopTopBar";
+import { DayHeaderActions } from "@/components/history/DayHeaderActions";
 import { MobileHeader } from "@/components/mobile/MobileHeader";
 import { DateStrip } from "@/components/mobile/DateStrip";
 import { MobileEntryList } from "@/components/mobile/MobileEntryList";
@@ -32,8 +35,9 @@ import { MicFab } from "@/components/mobile/MicFab";
 import { AddFab } from "@/components/mobile/AddFab";
 import { APP_VERSION } from "@/lib/version";
 
-const STRIP_BACK_DAYS = 30;
-const STRIP_AHEAD_DAYS = 7;
+const STRIP_BACK_DAYS_INITIAL = 30;
+const STRIP_AHEAD_DAYS_INITIAL = 7;
+const STRIP_LOAD_CHUNK = 30;
 
 function parseLocalDateStart(iso: string): number | undefined {
   const d = parseIsoLocalDate(iso);
@@ -85,16 +89,26 @@ function HomePageInner() {
     [selectedDay, today]
   );
 
-  // Okno stripa STAŁE — zależy tylko od today (nie od selectedDay).
-  // Dzięki temu klik dowolnego dnia w stripie/kalendarzu nie powoduje
-  // rerenderu pigułek ani niespodziewanego scrolla.
+  // Okno stripa — rośnie w obie strony przy infinite scroll w DateStrip.
+  // Klik dowolnego dnia w stripie/kalendarzu nie powoduje zmiany okna,
+  // tylko zmianę selectedDay.
+  const [stripBackDays, setStripBackDays] = useState(STRIP_BACK_DAYS_INITIAL);
+  const [stripAheadDays, setStripAheadDays] = useState(STRIP_AHEAD_DAYS_INITIAL);
   const windowStart = useMemo(
-    () => startOfDayLocal(addDays(today, -STRIP_BACK_DAYS)),
-    [today]
+    () => startOfDayLocal(addDays(today, -stripBackDays)),
+    [today, stripBackDays]
   );
   const windowEnd = useMemo(
-    () => endOfDayLocal(addDays(today, STRIP_AHEAD_DAYS)),
-    [today]
+    () => endOfDayLocal(addDays(today, stripAheadDays)),
+    [today, stripAheadDays]
+  );
+  const extendBack = useCallback(
+    () => setStripBackDays((d) => d + STRIP_LOAD_CHUNK),
+    []
+  );
+  const extendAhead = useCallback(
+    () => setStripAheadDays((d) => d + STRIP_LOAD_CHUNK),
+    []
   );
 
   // Fetch okno obejmuje okno stripa + selectedDay (jeśli wybrał daleki dzień
@@ -138,6 +152,7 @@ function HomePageInner() {
   const [searchDraft, setSearchDraft] = useState(q);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const [creatingToday, setCreatingToday] = useState(false);
 
   const fromMs = from ? parseLocalDateStart(from) : undefined;
   const toMs = to ? parseLocalDateEnd(to) : undefined;
@@ -201,16 +216,23 @@ function HomePageInner() {
     };
   }, []);
 
-  // Liczniki wpisów per dzień (do strip + kalendarza)
+  // Liczniki wpisów per dzień (do strip + kalendarza).
+  // Łączymy windowEntries (mobile strip) z entries (desktop, pełna lista
+  // przefiltrowana), żeby kalendarz pokazywał liczniki także dla dni
+  // poza oknem stripa.
   const entryCountsByDay = useMemo(() => {
     const map = new Map<string, number>();
-    if (!windowEntries) return map;
-    for (const e of windowEntries) {
+    const seen = new Set<string>();
+    const add = (e: ClientEntry) => {
+      if (seen.has(e.id)) return;
+      seen.add(e.id);
       const iso = toIsoLocalDate(new Date(e.createdAt));
       map.set(iso, (map.get(iso) ?? 0) + 1);
-    }
+    };
+    if (entries) entries.forEach(add);
+    if (windowEntries) windowEntries.forEach(add);
     return map;
-  }, [windowEntries]);
+  }, [entries, windowEntries]);
 
   const buildHref = useCallback(
     (next: {
@@ -318,6 +340,52 @@ function HomePageInner() {
     );
   }
 
+  // Desktop: wybór dnia z kalendarza w górnej belce.
+  // Zachowanie różne od mobile: auto-select najnowszego wpisu tego dnia
+  // (albo czyści id, jeśli brak wpisów — wtedy pokaże się EmptyDayPane).
+  function selectCalendarDay(iso: string) {
+    const dayEntries =
+      entries?.filter(
+        (e) => toIsoLocalDate(new Date(e.createdAt)) === iso
+      ) ?? [];
+    // listEntries zwraca posortowane desc po createdAt → pierwszy = najnowszy.
+    const newestId = dayEntries[0]?.id;
+    router.replace(
+      buildHref({
+        q,
+        tag,
+        from,
+        to,
+        moods: selectedMoods,
+        id: newestId,
+        d: iso === todayIso ? undefined : iso,
+      }),
+      { scroll: false }
+    );
+  }
+
+  async function handleCreateToday() {
+    if (creatingToday) return;
+    setCreatingToday(true);
+    try {
+      const id = await createEntry({
+        contentHtml: "",
+        mood: null,
+        createdAt: new Date(),
+        tags: [],
+        media: [],
+      });
+      router.replace(buildHref({ q, tag, from, to, moods: selectedMoods, id }));
+    } catch (e) {
+      console.error(e);
+      toast.error(
+        e instanceof Error ? e.message : "Nie udało się utworzyć wpisu."
+      );
+    } finally {
+      setCreatingToday(false);
+    }
+  }
+
   function applyPreset(preset: "today" | "week" | "month" | "30d") {
     const now = new Date();
     const end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -346,6 +414,29 @@ function HomePageInner() {
     (tag ? 1 : 0) + (from || to ? 1 : 0) + selectedMoods.length;
   const count = entries?.length ?? 0;
   const loading = entries === null;
+
+  // Po wyborze dnia w kalendarzu desktopowym scrolluj lewy panel do nagłówka
+  // tego dnia. Uruchamia się gdy zmienia się dayParam (URL) i lista wpisów
+  // jest już załadowana.
+  const listScrollRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!dayParam || !entries) return;
+    const el = listScrollRef.current?.querySelector<HTMLElement>(
+      `[data-date="${dayParam}"]`
+    );
+    if (el) {
+      el.scrollIntoView({ block: "start", behavior: "smooth" });
+    }
+  }, [dayParam, entries]);
+
+  // Day pokazywany przez prawy panel (gdy nie ma wybranego wpisu).
+  // Domyślnie dziś; jeśli user kliknął coś w kalendarzu — wskazany dzień.
+  const focusedDay = dayParam || todayIso;
+  const focusedDayHasEntries = entries
+    ? entries.some(
+        (e) => toIsoLocalDate(new Date(e.createdAt)) === focusedDay
+      )
+    : true; // przed załadowaniem nie pokazujemy EmptyDayPane
 
   const countText = loading
     ? "Wczytuję…"
@@ -458,65 +549,16 @@ function HomePageInner() {
     </div>
   );
 
-  const searchBar = (
-    <form onSubmit={(e) => e.preventDefault()} className="relative">
-      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
-      <Input
-        value={searchDraft}
-        onChange={(e) => setSearchDraft(e.target.value)}
-        placeholder="Szukaj w treści…"
-        className="pl-10 pr-10"
-      />
-      {q && (
-        <button
-          type="button"
-          onClick={clearSearch}
-          aria-label="Wyczyść wyszukiwanie"
-          className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-7 w-7 items-center justify-center rounded-full text-muted hover:bg-foreground/5 hover:text-foreground transition-colors"
-        >
-          <X className="h-4 w-4" />
-        </button>
-      )}
-    </form>
-  );
-
-  const filterToggleBtn = (
-    <button
-      type="button"
-      onClick={() => setFiltersOpen((v) => !v)}
-      aria-expanded={filtersOpen}
-      aria-label="Filtry"
-      className={
-        "relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-colors " +
-        (filtersOpen
-          ? "bg-foreground text-background"
-          : "text-muted hover:bg-foreground/5 hover:text-foreground")
-      }
-    >
-      <Filter className="h-5 w-5" />
-      {activeFilterCount > 0 && !filtersOpen && (
-        <span className="absolute -top-0.5 -right-0.5 inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full bg-foreground text-background text-[10px] leading-none">
-          {activeFilterCount}
-        </span>
-      )}
-    </button>
-  );
-
   // Desktop list pane (≥ lg)
   const desktopList = (
     <div className="flex flex-col h-full">
       <div className="px-4 pt-4 pb-3 border-b border-border bg-background/95 backdrop-blur sticky top-0 z-10">
-        <div className="flex items-center justify-between gap-3 mb-3">
-          <h1 className="font-display text-2xl font-bold tracking-tight leading-none">
-            Dziennik
-          </h1>
-          {filterToggleBtn}
-        </div>
-        <p className="text-xs text-muted mb-3">{countText}</p>
-        {filtersOpen && filtersPanel}
-        {searchBar}
+        <h1 className="font-display text-2xl font-bold tracking-tight leading-none">
+          Dziennik
+        </h1>
+        <p className="text-xs text-muted mt-2">{countText}</p>
       </div>
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto" ref={listScrollRef}>
         {loading ? (
           <div className="py-16 text-center text-muted">Wczytuję wpisy…</div>
         ) : count === 0 ? (
@@ -538,9 +580,15 @@ function HomePageInner() {
               return (
                 <div key={e.id}>
                   {showDate && (
-                    <h2 className="font-display text-sm font-semibold tracking-tight px-4 pt-4 pb-1 text-muted uppercase">
-                      {formatLongPL(date)}
-                    </h2>
+                    <div
+                      data-date={dayKey}
+                      className="group flex items-center justify-between gap-2 px-4 pt-4 pb-1"
+                    >
+                      <h2 className="font-display text-sm font-semibold tracking-tight text-muted uppercase">
+                        {formatLongPL(date)}
+                      </h2>
+                      <DayHeaderActions dayIso={dayKey} todayIso={todayIso} />
+                    </div>
                   )}
                   <button
                     type="button"
@@ -620,6 +668,8 @@ function HomePageInner() {
         scrollTrigger={stripScrollTrigger}
         scrollTarget={stripScrollTarget}
         scrollBehavior={stripScrollBehavior}
+        onExtendBack={extendBack}
+        onExtendAhead={extendAhead}
       />
       <div className="flex-1">
         {windowEntries === null ? (
@@ -647,7 +697,34 @@ function HomePageInner() {
       {mobileView}
       <HistorySplit
         list={desktopList}
-        preview={<HistoryPreviewPane selectedId={selectedId || null} />}
+        preview={
+          <div className="flex flex-col h-full">
+            <DesktopTopBar
+              todayIso={todayIso}
+              selectedDay={selectedDay}
+              onSelectDay={selectCalendarDay}
+              entryCountsByDay={entryCountsByDay}
+              q={q}
+              searchDraft={searchDraft}
+              onSearchDraftChange={setSearchDraft}
+              onClearSearch={clearSearch}
+              filtersOpen={filtersOpen}
+              onToggleFilters={() => setFiltersOpen((v) => !v)}
+              activeFilterCount={activeFilterCount}
+              filtersPanel={filtersPanel}
+              onCreateToday={handleCreateToday}
+              creatingToday={creatingToday}
+            />
+            <div className="flex-1 overflow-y-auto">
+              <HistoryPreviewPane
+                selectedId={selectedId || null}
+                selectedDay={focusedDay}
+                dayHasEntries={focusedDayHasEntries}
+                todayIso={todayIso}
+              />
+            </div>
+          </div>
+        }
       />
       <ComposerBar variant="desktop" selectedDay={todayIso} />
     </AppShell>

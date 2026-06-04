@@ -5,19 +5,11 @@ import { useRouter } from "next/navigation";
 import { Plus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { createEntry } from "@/lib/db-supabase";
-import { parseIsoLocalDate, isSameLocalDay } from "@/lib/dates";
+import { createdAtForDay } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 
 interface Props {
   selectedDay: string;
-}
-
-function createdAtForDay(iso: string): Date {
-  const day = parseIsoLocalDate(iso);
-  if (!day) return new Date();
-  if (isSameLocalDay(day, new Date())) return new Date();
-  day.setHours(12, 0, 0, 0);
-  return day;
 }
 
 export function AddFab({ selectedDay }: Props) {

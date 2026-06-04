@@ -4,8 +4,19 @@ import { useEffect, useState } from "react";
 import { BookOpen } from "lucide-react";
 import { getEntry, type ClientEntry, type EntriesChangedDetail } from "@/lib/db-supabase";
 import { EntryEditor } from "@/components/entry/EntryEditor";
+import { EmptyDayPane } from "./EmptyDayPane";
 
-export function HistoryPreviewPane({ selectedId }: { selectedId: string | null }) {
+export function HistoryPreviewPane({
+  selectedId,
+  selectedDay,
+  dayHasEntries,
+  todayIso,
+}: {
+  selectedId: string | null;
+  selectedDay?: string;
+  dayHasEntries?: boolean;
+  todayIso?: string;
+}) {
   const [entry, setEntry] = useState<ClientEntry | null | undefined>(undefined);
 
   useEffect(() => {
@@ -46,6 +57,9 @@ export function HistoryPreviewPane({ selectedId }: { selectedId: string | null }
   }, [selectedId]);
 
   if (!selectedId) {
+    if (selectedDay && todayIso && dayHasEntries === false) {
+      return <EmptyDayPane selectedDay={selectedDay} todayIso={todayIso} />;
+    }
     return (
       <div className="h-full flex flex-col items-center justify-center text-muted px-8 text-center">
         <BookOpen className="h-12 w-12 mb-4 opacity-30" />

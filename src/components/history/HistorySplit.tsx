@@ -59,7 +59,7 @@ export function HistorySplit({
   }
 
   return (
-    <div className="hidden lg:flex lg:h-[calc(100dvh-3.5rem)] w-full items-stretch">
+    <div className="hidden lg:flex lg:h-dvh w-full items-stretch">
       <aside
         className="flex flex-col self-stretch border-r border-border bg-background"
         style={{ width: `${width}px`, flexShrink: 0 }}
@@ -77,7 +77,7 @@ export function HistorySplit({
           className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-12 w-[3px] rounded-full bg-foreground/25 group-hover:bg-foreground/50 transition-colors"
         />
       </div>
-      <main className="flex-1 self-stretch overflow-y-auto bg-background min-w-0">
+      <main className="flex-1 self-stretch overflow-hidden bg-background min-w-0">
         {preview}
       </main>
     </div>

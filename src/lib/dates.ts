@@ -115,3 +115,13 @@ export function isSameLocalDay(a: Date, b: Date): boolean {
     a.getDate() === b.getDate()
   );
 }
+
+/** Dla wpisu tworzonego na konkretny dzień: jeśli to dziś — bieżąca godzina,
+ *  inaczej — godzina 12:00 wybranego dnia. */
+export function createdAtForDay(iso: string): Date {
+  const day = parseIsoLocalDate(iso);
+  if (!day) return new Date();
+  if (isSameLocalDay(day, new Date())) return new Date();
+  day.setHours(12, 0, 0, 0);
+  return day;
+}
