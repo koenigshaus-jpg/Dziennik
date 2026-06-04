@@ -9,12 +9,16 @@ import { toIsoLocalDate } from "@/lib/dates";
 interface Props {
   selectedDay?: string;
   onSelectDay?: (iso: string) => void;
+  /** Klik "Dziś" — odróżniony od zwykłego onSelectDay, by parent mógł
+   *  dodatkowo scrollnąć strip do today. */
+  onGoToday?: () => void;
   entryCountsByDay?: Map<string, number>;
 }
 
 export function MobileHeader({
   selectedDay,
   onSelectDay,
+  onGoToday,
   entryCountsByDay,
 }: Props) {
   const [menuOpen, setMenuOpen] = React.useState(false);
@@ -42,7 +46,7 @@ export function MobileHeader({
           {!isToday && (
             <button
               type="button"
-              onClick={() => onSelectDay?.(today)}
+              onClick={() => onGoToday?.()}
               className="inline-flex h-8 items-center justify-center px-3 rounded-full border border-border text-xs font-medium hover:bg-foreground/5 transition-colors"
               aria-label="Wróć do dzisiaj"
             >

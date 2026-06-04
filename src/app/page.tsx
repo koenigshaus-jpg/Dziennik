@@ -31,11 +31,8 @@ import { ComposerBar } from "@/components/mobile/ComposerBar";
 import { MicFab } from "@/components/mobile/MicFab";
 import { APP_VERSION } from "@/lib/version";
 
-const BASE_BACK_DAYS = 5;
-const BASE_AHEAD_DAYS = 5;
-const LOW_ENTRY_THRESHOLD = 10;
-const EXTEND_STEP_DAYS = 5;
-const MAX_EXTRA_DAYS = 55;
+const STRIP_BACK_DAYS = 30;
+const STRIP_AHEAD_DAYS = 7;
 
 function parseLocalDateStart(iso: string): number | undefined {
   const d = parseIsoLocalDate(iso);
@@ -87,29 +84,30 @@ function HomePageInner() {
     [selectedDay, today]
   );
 
-  // Rozszerzalne okno wokół wybranego dnia
-  const [extraBack, setExtraBack] = useState(0);
-  const [extraAhead, setExtraAhead] = useState(0);
-
-  // Reset rozszerzeń przy zmianie wybranego dnia
-  useEffect(() => {
-    setExtraBack(0);
-    setExtraAhead(0);
-  }, [selectedDay]);
-
-  const totalBack = BASE_BACK_DAYS + extraBack;
-  const totalAhead = BASE_AHEAD_DAYS + extraAhead;
-
+  // Okno stripa STAŁE — zależy tylko od today (nie od selectedDay).
+  // Dzięki temu klik dowolnego dnia w stripie/kalendarzu nie powoduje
+  // rerenderu pigułek ani niespodziewanego scrolla.
   const windowStart = useMemo(
-    () => startOfDayLocal(addDays(selectedDayDate, -totalBack)),
-    [selectedDayDate, totalBack]
+    () => startOfDayLocal(addDays(today, -STRIP_BACK_DAYS)),
+    [today]
   );
   const windowEnd = useMemo(
-    () => endOfDayLocal(addDays(selectedDayDate, totalAhead)),
-    [selectedDayDate, totalAhead]
+    () => endOfDayLocal(addDays(today, STRIP_AHEAD_DAYS)),
+    [today]
   );
-  const rangeStartIso = useMemo(() => toIsoLocalDate(windowStart), [windowStart]);
-  const rangeEndIso = useMemo(() => toIsoLocalDate(windowEnd), [windowEnd]);
+
+  // Fetch okno obejmuje okno stripa + selectedDay (jeśli wybrał daleki dzień
+  // z pełnego kalendarza, lista wpisów go obejmie).
+  const fetchFromMs = useMemo(() => {
+    const selStart = startOfDayLocal(selectedDayDate).getTime();
+    return Math.min(windowStart.getTime(), selStart);
+  }, [windowStart, selectedDayDate]);
+  const fetchToMs = useMemo(() => {
+    const selEnd = endOfDayLocal(selectedDayDate).getTime();
+    return Math.max(windowEnd.getTime(), selEnd);
+  }, [windowEnd, selectedDayDate]);
+
+  const [stripScrollTrigger, setStripScrollTrigger] = useState(0);
 
 
   // Stan
@@ -152,14 +150,14 @@ function HomePageInner() {
     };
   }, [q, tag, from, to, fromMs, toMs, selectedMoods, reloadKey]);
 
-  // Mobile: wpisy w oknie dnia
+  // Mobile: wpisy w oknie fetch (strip window + ewentualny selectedDay)
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const es = await listEntries({
-          from: windowStart.getTime(),
-          to: windowEnd.getTime(),
+          from: fetchFromMs,
+          to: fetchToMs,
         });
         if (!cancelled) setWindowEntries(es);
       } catch (e) {
@@ -170,7 +168,7 @@ function HomePageInner() {
     return () => {
       cancelled = true;
     };
-  }, [windowStart, windowEnd, reloadKey]);
+  }, [fetchFromMs, fetchToMs, reloadKey]);
 
   useEffect(() => {
     const refetch = () => setReloadKey((k) => k + 1);
@@ -180,26 +178,6 @@ function HomePageInner() {
       window.removeEventListener("entries-changed", refetch);
       window.removeEventListener("focus", refetch);
     };
-  }, []);
-
-  // Auto-expand: gdy w bazowym oknie ±5 wpisów <10, rozszerz raz do ±10
-  useEffect(() => {
-    if (windowEntries === null) return;
-    if (
-      windowEntries.length < LOW_ENTRY_THRESHOLD &&
-      extraBack === 0 &&
-      extraAhead === 0
-    ) {
-      setExtraBack(EXTEND_STEP_DAYS);
-      setExtraAhead(EXTEND_STEP_DAYS);
-    }
-  }, [windowEntries, extraBack, extraAhead]);
-
-  const extendOlder = useCallback(() => {
-    setExtraBack((b) => Math.min(b + EXTEND_STEP_DAYS, MAX_EXTRA_DAYS));
-  }, []);
-  const extendNewer = useCallback(() => {
-    setExtraAhead((a) => Math.min(a + EXTEND_STEP_DAYS, MAX_EXTRA_DAYS));
   }, []);
 
   // Liczniki wpisów per dzień (do strip + kalendarza)
@@ -604,6 +582,12 @@ function HomePageInner() {
       <MobileHeader
         selectedDay={selectedDay}
         onSelectDay={setSelectedDay}
+        onGoToday={() => {
+          setSelectedDay(todayIso);
+          // Inkrement counter — useEffect w DateStripie strzela scroll
+          // do today PO renderze z nowym oknem (z retry loop).
+          setStripScrollTrigger((c) => c + 1);
+        }}
         entryCountsByDay={entryCountsByDay}
       />
       <DateStrip
@@ -612,6 +596,8 @@ function HomePageInner() {
         entryCountsByDay={entryCountsByDay}
         windowStart={windowStart}
         windowEnd={windowEnd}
+        scrollTrigger={stripScrollTrigger}
+        scrollTarget={todayIso}
       />
       <div className="flex-1">
         {windowEntries === null ? (

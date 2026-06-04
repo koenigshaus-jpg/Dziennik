@@ -47,6 +47,13 @@ export function formatShortPL(d: Date): string {
   return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()}`;
 }
 
+/** "Czwartek 4.06.2026" — pełna nazwa dnia + skrócona data (dzień bez 0). */
+export function formatWeekdayDotPL(d: Date): string {
+  return `${PL_WEEKDAYS[d.getDay()]} ${d.getDate()}.${pad(
+    d.getMonth() + 1
+  )}.${d.getFullYear()}`;
+}
+
 const PL_WEEKDAYS_SHORT = ["niedz", "pon", "wt", "śr", "czw", "pt", "sob"];
 
 const PL_MONTHS_NOM = [

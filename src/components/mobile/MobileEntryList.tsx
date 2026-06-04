@@ -2,15 +2,13 @@
 
 import * as React from "react";
 import type { ClientEntry } from "@/lib/db-supabase";
-import { formatLongPL, parseIsoLocalDate, toIsoLocalDate, isSameLocalDay } from "@/lib/dates";
+import { formatWeekdayDotPL, parseIsoLocalDate, toIsoLocalDate, isSameLocalDay } from "@/lib/dates";
 import { MobileEntryCard } from "./MobileEntryCard";
 import { MobileEmptyDay } from "./MobileEmptyDay";
 
 interface Props {
   entries: ClientEntry[];
   selectedDay: string;
-  recording?: boolean;
-  onMicTap?: () => void;
 }
 
 export function MobileEntryList({ entries, selectedDay }: Props) {
@@ -31,8 +29,8 @@ export function MobileEntryList({ entries, selectedDay }: Props) {
   return (
     <div className="px-3 pt-3 pb-[200px]">
       <header className="flex items-baseline justify-between mb-3 px-1">
-        <h2 className="font-sans text-sm uppercase tracking-[0.18em] font-semibold text-foreground/80">
-          {formatLongPL(date)}
+        <h2 className="text-[10px] uppercase tracking-wider text-muted">
+          {formatWeekdayDotPL(date)}
         </h2>
         {isToday && (
           <span className="text-[10px] uppercase tracking-wider text-muted font-semibold">
