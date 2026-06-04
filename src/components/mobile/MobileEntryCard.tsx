@@ -29,10 +29,10 @@ export function MobileEntryCard({ entry, first = false }: Props) {
       )}
     >
       <div className="flex items-start gap-3">
-        <div className="flex-1 min-w-0 text-xs leading-5 text-foreground/90">
+        <div className="flex-1 min-w-0 text-base font-medium leading-6 text-foreground/90">
           {entry.contentText && (
-            <p className="whitespace-pre-wrap line-clamp-[10]">
-              {snippet(entry.contentText, 800)}
+            <p className="whitespace-pre-wrap line-clamp-[20]">
+              {snippet(entry.contentText, 1600)}
             </p>
           )}
         </div>

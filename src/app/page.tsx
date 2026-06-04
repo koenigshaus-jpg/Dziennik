@@ -29,6 +29,7 @@ import { DateStrip } from "@/components/mobile/DateStrip";
 import { MobileEntryList } from "@/components/mobile/MobileEntryList";
 import { ComposerBar } from "@/components/mobile/ComposerBar";
 import { MicFab } from "@/components/mobile/MicFab";
+import { AddFab } from "@/components/mobile/AddFab";
 import { APP_VERSION } from "@/lib/version";
 
 const STRIP_BACK_DAYS = 30;
@@ -630,6 +631,7 @@ function HomePageInner() {
           />
         )}
       </div>
+      <AddFab selectedDay={selectedDay} />
       <MicFab selectedDay={selectedDay} />
       <div className="fixed bottom-0 inset-x-0 z-30 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-t border-border">
         <ComposerBar variant="mobile" selectedDay={selectedDay} />

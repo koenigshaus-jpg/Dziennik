@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
 import { Mic, Square, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { createEntry } from "@/lib/db-supabase";
@@ -31,7 +30,6 @@ function createdAtForDay(iso: string): Date {
 }
 
 export function MicFab({ selectedDay }: Props) {
-  const router = useRouter();
   const [creating, setCreating] = React.useState(false);
 
   // Trzymamy aktualny selectedDay w refie, żeby onTranscript widział aktualną
@@ -47,14 +45,13 @@ export function MicFab({ selectedDay }: Props) {
       if (!t) return;
       setCreating(true);
       try {
-        const id = await createEntry({
+        await createEntry({
           contentHtml: `<p>${escapeHtml(t).replace(/\n/g, "<br/>")}</p>`,
           mood: null,
           createdAt: createdAtForDay(selectedDayRef.current),
           tags: [],
           media: [],
         });
-        router.push(`/wpis/${id}`);
       } catch (e) {
         console.error(e);
         toast.error(
