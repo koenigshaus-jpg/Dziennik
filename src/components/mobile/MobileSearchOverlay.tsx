@@ -265,7 +265,7 @@ export function MobileSearchOverlay({ open, onOpenChange }: Props) {
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Szukaj w treści…"
-                  className="w-full h-10 rounded-full bg-foreground/[0.04] border-0 outline-none focus:ring-2 focus:ring-foreground/10 text-sm pl-9 pr-9 placeholder:text-muted/70"
+                  className="w-full h-10 rounded-full bg-foreground/[0.04] border-0 outline-none focus:ring-2 focus:ring-foreground/10 text-sm pl-9 pr-9 placeholder:text-muted/70 [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:appearance-none"
                 />
                 {query && (
                   <button
