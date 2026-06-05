@@ -1,9 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { CalendarDays, Settings } from "lucide-react";
+import { CalendarDays, Search, Settings } from "lucide-react";
 import { HamburgerDrawer } from "./HamburgerDrawer";
 import { CalendarSheet } from "./CalendarSheet";
+import { MobileSearchOverlay } from "./MobileSearchOverlay";
 import { toIsoLocalDate } from "@/lib/dates";
 
 interface Props {
@@ -23,6 +24,7 @@ export function MobileHeader({
 }: Props) {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [calendarOpen, setCalendarOpen] = React.useState(false);
+  const [searchOpen, setSearchOpen] = React.useState(false);
   const today = React.useMemo(() => toIsoLocalDate(new Date()), []);
   const calendarSelected = selectedDay ?? today;
   const counts = entryCountsByDay ?? new Map<string, number>();
@@ -47,6 +49,14 @@ export function MobileHeader({
           )}
           <button
             type="button"
+            onClick={() => setSearchOpen(true)}
+            className="inline-flex h-11 w-11 items-center justify-center rounded-full hover:bg-foreground/5"
+            aria-label="Szukaj"
+          >
+            <Search className="h-6 w-6" />
+          </button>
+          <button
+            type="button"
             onClick={() => setCalendarOpen(true)}
             className="inline-flex h-11 w-11 items-center justify-center rounded-full hover:bg-foreground/5"
             aria-label="Otwórz kalendarz"
@@ -64,6 +74,7 @@ export function MobileHeader({
         </div>
       </header>
       <HamburgerDrawer open={menuOpen} onOpenChange={setMenuOpen} />
+      <MobileSearchOverlay open={searchOpen} onOpenChange={setSearchOpen} />
       <CalendarSheet
         open={calendarOpen}
         onOpenChange={setCalendarOpen}
