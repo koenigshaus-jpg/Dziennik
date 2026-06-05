@@ -488,8 +488,8 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
         )}
         {renderMicButton(
           bare
-            ? "hidden lg:inline-flex lg:absolute lg:bottom-3 lg:right-3"
-            : "absolute bottom-3 right-3"
+            ? "hidden lg:inline-flex lg:absolute lg:top-0 lg:right-0"
+            : "absolute top-0 right-0"
         )}
         {!bare && (images.length > 0 || audio.length > 0) && (
           <div className="hidden lg:flex flex-col gap-3 lg:mt-auto lg:pt-4 lg:pr-12">

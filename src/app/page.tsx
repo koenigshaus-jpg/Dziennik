@@ -683,7 +683,7 @@ function HomePageInner() {
       </div>
       <AddFab selectedDay={selectedDay} />
       <MicFab selectedDay={selectedDay} />
-      <div className="fixed bottom-0 inset-x-0 z-30 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-t border-border">
+      <div className="fixed bottom-0 inset-x-0 z-30">
         <ComposerBar variant="mobile" selectedDay={selectedDay} />
       </div>
     </div>
