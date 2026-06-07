@@ -73,7 +73,10 @@ export function CalendarSheet({
 
   const today = React.useMemo(() => new Date(), []);
   const todayIso = React.useMemo(() => toIsoLocalDate(today), [today]);
-  const selected = parseIsoLocalDate(selectedDay);
+  const selected = React.useMemo(
+    () => parseIsoLocalDate(selectedDay),
+    [selectedDay]
+  );
 
   // Lista miesięcy do wyrenderowania — od dziś -MONTHS_BACK do dziś +MONTHS_FORWARD.
   const months = React.useMemo(() => {
@@ -86,21 +89,36 @@ export function CalendarSheet({
   }, [today]);
 
   // Po otwarciu kalendarza: scroll do miesiąca wybranego dnia (bez animacji).
-  React.useLayoutEffect(() => {
+  // Radix renderuje Content przez Portal i animuje slide-in-from-bottom, więc
+  // próbujemy kilka razy, aż scrollRef + monthRefs zostaną zamontowane i będą
+  // miały sensowne wymiary. Bez tego pierwsze otwarcie ląduje na najstarszym
+  // miesiącu (scrollTop=0) i trzeba długo przewijać do dziś.
+  React.useEffect(() => {
     if (!open) return;
     const target = selected ?? today;
     const key = monthKey(startOfMonth(target));
-    // Czekamy frame, żeby DOM zdążył się zmontować po animacji wjazdu
-    const raf = requestAnimationFrame(() => {
+    let cancelled = false;
+    let attempts = 0;
+
+    const tryScroll = () => {
+      if (cancelled) return;
+      const container = scrollRef.current;
       const el = monthRefs.current.get(key);
-      if (el && scrollRef.current) {
-        // offsetTop względem kontenera scrollującego
-        const containerTop = scrollRef.current.getBoundingClientRect().top;
+      if (container && el && container.clientHeight > 0) {
+        const containerTop = container.getBoundingClientRect().top;
         const elTop = el.getBoundingClientRect().top;
-        scrollRef.current.scrollTop += elTop - containerTop;
+        container.scrollTop += elTop - containerTop;
+        return;
       }
-    });
-    return () => cancelAnimationFrame(raf);
+      if (attempts++ < 20) {
+        requestAnimationFrame(tryScroll);
+      }
+    };
+
+    requestAnimationFrame(tryScroll);
+    return () => {
+      cancelled = true;
+    };
   }, [open, selected, today]);
 
   function scrollToToday() {
