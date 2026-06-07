@@ -1,8 +1,7 @@
-import type { PersonaConfig, PersonaVariant, EntryFull } from "./types";
+import type { PersonaConfig, EntryFull } from "./types";
 
 interface BuildSystemPromptOptions {
   persona: PersonaConfig;
-  variant: PersonaVariant;
   /** Dzień w którym jest użytkownik, YYYY-MM-DD. */
   day: string;
   /** Pełna treść wpisów z tego dnia. */
@@ -12,20 +11,14 @@ interface BuildSystemPromptOptions {
 }
 
 /**
- * Składa system prompt z 4 sekcji w stałej kolejności:
- *  1) bazowy prompt persony
- *  2) fragment wariantu (konkretna szkoła / postać)
- *  3) kontekst dnia (pełne wpisy)
- *  4) pełne wpisy z pozostałych dni
+ * Składa system prompt: prompt persony + kontekst dnia + wpisy.
  */
 export function buildSystemPrompt(opts: BuildSystemPromptOptions): string {
-  const { persona, variant, day, dayEntries, otherEntries } = opts;
+  const { persona, day, dayEntries, otherEntries } = opts;
 
   const parts: string[] = [];
 
-  parts.push(persona.baseSystemPrompt.trim());
-  parts.push("\n\n— — —\n\n");
-  parts.push(variant.systemPromptFragment.trim());
+  parts.push(persona.systemPrompt.trim());
 
   parts.push("\n\n— — —\n\nKONTEKST UŻYTKOWNIKA\n");
   parts.push(`Dzisiaj jest ${formatDayPl(day)}.\n`);
@@ -74,7 +67,6 @@ const MONTHS_PL = [
 ];
 
 function formatDayPl(iso: string): string {
-  // iso: YYYY-MM-DD
   const [y, m, d] = iso.split("-").map((s) => parseInt(s, 10));
   if (!y || !m || !d) return iso;
   return `${d} ${MONTHS_PL[m - 1]} ${y}`;

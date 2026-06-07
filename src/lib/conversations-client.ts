@@ -27,7 +27,8 @@ export interface Conversation {
   /** YYYY-MM-DD — dzień, do którego rozmowa jest przypisana. */
   day: string;
   personaKey: PersonaKey;
-  personaVariant: string;
+  /** @deprecated Pozostawione na potrzeby starych rekordów — nieużywane. */
+  personaVariant?: string;
   /** Null do czasu auto-generacji po 2. odpowiedzi assistant. */
   title: string | null;
   createdAt: number;
@@ -85,14 +86,12 @@ function reqToPromise<T>(r: IDBRequest<T>): Promise<T> {
 export async function createConversation(input: {
   day: string;
   personaKey: PersonaKey;
-  personaVariant: string;
 }): Promise<Conversation> {
   const now = Date.now();
   const conv: Conversation = {
     id: newId(),
     day: input.day,
     personaKey: input.personaKey,
-    personaVariant: input.personaVariant,
     title: null,
     createdAt: now,
     updatedAt: now,

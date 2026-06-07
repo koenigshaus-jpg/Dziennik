@@ -20,18 +20,14 @@ import {
 import { cn } from "@/lib/utils";
 
 import { AgentPersonaMenu } from "./AgentPersonaMenu";
-import { BrutalEditorWarning } from "./BrutalEditorWarning";
 import { AgentMarkdown } from "./AgentMarkdown";
 
 import {
   getDefaultPersona,
-  getVariantPreference,
-  setVariantPreference,
   setDefaultPersona,
   getDeepMode,
-  hasSeenBrutalWarning,
 } from "@/lib/agent/client-state";
-import { getPersona, getVariant } from "@/lib/agent/personas";
+import { getPersona } from "@/lib/agent/personas";
 import type { PersonaKey } from "@/lib/agent/types";
 import { buildEntriesContext } from "@/lib/agent/entries-context";
 import { getEntry } from "@/lib/db-client";
@@ -49,15 +45,13 @@ import {
 interface Props {
   day: string;
   initialMessage?: string;
+  initialPersonaKey?: PersonaKey;
   onClose: () => void;
 }
 
-export function AgentSheet({ day, initialMessage, onClose }: Props) {
-  const [personaKey, setPersonaKey] = React.useState<PersonaKey>(() =>
-    getDefaultPersona()
-  );
-  const [variantId, setVariantId] = React.useState<string>(() =>
-    getVariantPreference(getDefaultPersona())
+export function AgentSheet({ day, initialMessage, initialPersonaKey, onClose }: Props) {
+  const [personaKey, setPersonaKey] = React.useState<PersonaKey>(
+    () => initialPersonaKey ?? getDefaultPersona()
   );
   const [conversationId, setConversationId] = React.useState<string | null>(
     null
@@ -66,10 +60,6 @@ export function AgentSheet({ day, initialMessage, onClose }: Props) {
     ConversationMessage[]
   >([]);
   const [conversationLoaded, setConversationLoaded] = React.useState(false);
-  const [pendingBrutal, setPendingBrutal] = React.useState<{
-    personaKey: PersonaKey;
-    variantId: string;
-  } | null>(null);
 
   // Esc zamyka sheet.
   React.useEffect(() => {
@@ -91,7 +81,6 @@ export function AgentSheet({ day, initialMessage, onClose }: Props) {
         const latest = list[0];
         setConversationId(latest.id);
         setInitialMessages(latest.messages);
-        setVariantId(latest.personaVariant); // sync wariant z aktualną rozmową
       } else {
         setConversationId(null);
         setInitialMessages([]);
@@ -103,29 +92,14 @@ export function AgentSheet({ day, initialMessage, onClose }: Props) {
     };
   }, [day, personaKey]);
 
-  const handleSelectPersona = React.useCallback(
-    (key: PersonaKey, vId: string) => {
-      // Brutalny redaktor — modal jednorazowo.
-      if (
-        key === "creative" &&
-        vId === "brutal-editor" &&
-        !hasSeenBrutalWarning()
-      ) {
-        setPendingBrutal({ personaKey: key, variantId: vId });
-        return;
-      }
-      setVariantPreference(key, vId);
-      setDefaultPersona(key);
-      setPersonaKey(key);
-      setVariantId(vId);
-    },
-    []
-  );
+  const handleSelectPersona = React.useCallback((key: PersonaKey) => {
+    setDefaultPersona(key);
+    setPersonaKey(key);
+  }, []);
 
   const handleNewConversation = React.useCallback(() => {
     setConversationId(null);
     setInitialMessages([]);
-    // Reset key (poprzez setConversationLoaded toggling) zostawiamy AgentChatInstance.
     setConversationLoaded(false);
     setTimeout(() => setConversationLoaded(true), 0);
   }, []);
@@ -168,7 +142,6 @@ export function AgentSheet({ day, initialMessage, onClose }: Props) {
         <div className="flex items-center gap-2 px-3 lg:px-4 py-2.5 border-b border-border">
           <AgentPersonaMenu
             personaKey={personaKey}
-            variantId={variantId}
             onSelect={handleSelectPersona}
           />
           <div className="flex-1" />
@@ -211,10 +184,9 @@ export function AgentSheet({ day, initialMessage, onClose }: Props) {
         {/* Chat instance — przeładowuje się przy zmianie persony / rozmowy. */}
         {conversationLoaded ? (
           <AgentChatInstance
-            key={`${conversationId ?? "new"}-${personaKey}-${variantId}`}
+            key={`${conversationId ?? "new"}-${personaKey}`}
             day={day}
             personaKey={personaKey}
-            variantId={variantId}
             existingConversationId={conversationId}
             existingMessages={initialMessages}
             initialMessage={initialMessage}
@@ -226,22 +198,6 @@ export function AgentSheet({ day, initialMessage, onClose }: Props) {
           </div>
         )}
       </div>
-
-      <BrutalEditorWarning
-        open={!!pendingBrutal}
-        onCancel={() => setPendingBrutal(null)}
-        onConfirm={() => {
-          if (!pendingBrutal) return;
-          setVariantPreference(
-            pendingBrutal.personaKey,
-            pendingBrutal.variantId
-          );
-          setDefaultPersona(pendingBrutal.personaKey);
-          setPersonaKey(pendingBrutal.personaKey);
-          setVariantId(pendingBrutal.variantId);
-          setPendingBrutal(null);
-        }}
-      />
     </>
   );
 }
@@ -254,7 +210,6 @@ export function AgentSheet({ day, initialMessage, onClose }: Props) {
 interface InstanceProps {
   day: string;
   personaKey: PersonaKey;
-  variantId: string;
   existingConversationId: string | null;
   existingMessages: ConversationMessage[];
   initialMessage?: string;
@@ -279,14 +234,12 @@ function extractText(message: UIMessage): string {
 function AgentChatInstance({
   day,
   personaKey,
-  variantId,
   existingConversationId,
   existingMessages,
   initialMessage,
   onConversationCreated,
 }: InstanceProps) {
   const persona = getPersona(personaKey);
-  const variant = getVariant(personaKey, variantId);
   const conversationIdRef = React.useRef<string | null>(existingConversationId);
   const titleGeneratedRef = React.useRef<boolean>(
     existingMessages.some((m) => m.role === "assistant") &&
@@ -308,7 +261,6 @@ function AgentChatInstance({
             body: {
               messages: plain,
               personaKey,
-              personaVariant: variantId,
               deepMode: getDeepMode(personaKey),
               day,
               dayEntries,
@@ -317,7 +269,7 @@ function AgentChatInstance({
           };
         },
       }),
-    [day, personaKey, variantId]
+    [day, personaKey]
   );
 
   const { messages, sendMessage, status, error, addToolResult, stop } =
@@ -352,7 +304,6 @@ function AgentChatInstance({
             const created = await createConversation({
               day,
               personaKey,
-              personaVariant: variantId,
             });
             convId = created.id;
             conversationIdRef.current = convId;
@@ -422,7 +373,6 @@ function AgentChatInstance({
       const created = await createConversation({
         day,
         personaKey,
-        personaVariant: variantId,
       });
       convId = created.id;
       conversationIdRef.current = convId;
@@ -465,9 +415,9 @@ function AgentChatInstance({
         {messages.length === 0 && (
           <div className="text-center text-sm text-muted py-8">
             <div className="font-medium text-foreground/80 mb-1">
-              {persona.name} · {variant.name}
+              {persona.name}
             </div>
-            <p>{variant.description}</p>
+            <p>{persona.description}</p>
           </div>
         )}
         {messages.map((m) => (

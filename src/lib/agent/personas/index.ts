@@ -1,10 +1,9 @@
-import type { PersonaConfig, PersonaKey, PersonaVariant } from "../types";
+import type { PersonaConfig, PersonaKey } from "../types";
 import { advisor } from "./advisor";
 import { careerCoach } from "./career-coach";
 import { creative } from "./creative";
 import { philosopher } from "./philosopher";
 import { productivity } from "./productivity";
-import { stoic } from "./stoic";
 import { therapist } from "./therapist";
 
 export const PERSONAS: Record<PersonaKey, PersonaConfig> = {
@@ -12,7 +11,6 @@ export const PERSONAS: Record<PersonaKey, PersonaConfig> = {
   therapist,
   philosopher,
   careerCoach,
-  stoic,
   creative,
   productivity,
 };
@@ -25,23 +23,17 @@ export const PERSONA_ORDER: PersonaKey[] = [
   "creative",
   "therapist",
   "philosopher",
-  "stoic",
 ];
 
-export function getPersona(key: PersonaKey): PersonaConfig {
-  return PERSONAS[key];
-}
-
-export function getVariant(
-  key: PersonaKey,
-  variantId: string
-): PersonaVariant {
-  const persona = PERSONAS[key];
-  const variant = persona.variants.find((v) => v.id === variantId);
-  return variant ?? persona.variants[0];
-}
-
-/** Domyślny wariant dla persony — pierwszy z listy. */
-export function getDefaultVariantId(key: PersonaKey): string {
-  return PERSONAS[key].variants[0].id;
+/**
+ * Zwraca personę po kluczu. Fallback do pierwszej, jeśli klucz nieznany
+ * (np. stara rozmowa zapisana pod usuniętym kluczem "stoic" → trafia do
+ * filozofa, który scałkował esencję stoika).
+ */
+export function getPersona(key: PersonaKey | string): PersonaConfig {
+  const k = key as PersonaKey;
+  if (PERSONAS[k]) return PERSONAS[k];
+  // Backward compat: dawne "stoic" → philosopher
+  if (key === "stoic") return PERSONAS.philosopher;
+  return PERSONAS[PERSONA_ORDER[0]];
 }

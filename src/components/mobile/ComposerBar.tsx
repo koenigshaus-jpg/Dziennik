@@ -1,10 +1,33 @@
 "use client";
 
 import * as React from "react";
-import { Mic, Send, Loader2, Square } from "lucide-react";
+import { Mic, Send, Loader2, Square, Check } from "lucide-react";
+import * as LucideIcons from "lucide-react";
 import { useStt } from "@/lib/useStt";
 import { cn } from "@/lib/utils";
 import { useAgentSheet } from "@/components/agent/AgentSheetProvider";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
+import { PERSONA_ORDER, PERSONAS, getPersona } from "@/lib/agent/personas";
+import {
+  getDefaultPersona,
+  setDefaultPersona,
+} from "@/lib/agent/client-state";
+import type { PersonaKey } from "@/lib/agent/types";
+
+function getLucideIcon(
+  name: string
+): React.ComponentType<{ className?: string }> {
+  const lib = LucideIcons as unknown as Record<
+    string,
+    React.ComponentType<{ className?: string }>
+  >;
+  return lib[name] ?? lib.Sparkles;
+}
 
 interface Props {
   variant: "mobile" | "desktop";
@@ -30,6 +53,21 @@ export const ComposerBar = React.forwardRef<ComposerBarHandle, Props>(
     const [sending, setSending] = React.useState(false);
     const inputRef = React.useRef<HTMLTextAreaElement | null>(null);
     const { openSheet } = useAgentSheet();
+    const [personaKey, setPersonaKey] = React.useState<PersonaKey>("advisor");
+    const [personaMounted, setPersonaMounted] = React.useState(false);
+
+    React.useEffect(() => {
+      setPersonaKey(getDefaultPersona());
+      setPersonaMounted(true);
+    }, []);
+
+    const handleSelectPersona = React.useCallback((key: PersonaKey) => {
+      setDefaultPersona(key);
+      setPersonaKey(key);
+    }, []);
+
+    const selectedPersona = getPersona(personaKey);
+    const PersonaIcon = getLucideIcon(selectedPersona.icon);
 
     const { recording, processing, elapsed, start, stop } = useStt({
       onTranscript: (text) => {
@@ -57,7 +95,11 @@ export const ComposerBar = React.forwardRef<ComposerBarHandle, Props>(
       if (!text || sending) return;
       setSending(true);
       try {
-        openSheet({ day: selectedDay, initialMessage: text });
+        openSheet({
+          day: selectedDay,
+          initialMessage: text,
+          personaKey: personaMounted ? personaKey : undefined,
+        });
         setValue("");
       } finally {
         setSending(false);
@@ -100,7 +142,7 @@ export const ComposerBar = React.forwardRef<ComposerBarHandle, Props>(
             aria-hidden
             className="pointer-events-none absolute -inset-[1px] rounded-[1.55rem] bg-[conic-gradient(from_180deg_at_50%_50%,#7dd3fc,#c4b5fd,#f9a8d4,#fcd34d,#7dd3fc)] opacity-50"
           />
-          <div className="relative flex items-end gap-2 bg-background/95 backdrop-blur border border-border/60 rounded-3xl px-2 py-1.5 shadow-[var(--elevation-3)]">
+          <div className="relative flex items-center gap-2 bg-background/95 backdrop-blur border border-border/60 rounded-3xl px-2 py-0.5 shadow-[var(--elevation-3)]">
             {recording ? (
               <button
                 type="button"
@@ -144,9 +186,54 @@ export const ComposerBar = React.forwardRef<ComposerBarHandle, Props>(
                 placeholder={recording ? "Słucham…" : "Zapytaj asystenta…"}
                 disabled={sending}
                 rows={1}
-                className="w-full resize-none bg-transparent border-0 outline-none focus:ring-0 text-sm leading-6 py-2 px-1 placeholder:text-muted/70"
+                className="w-full resize-none bg-transparent border-0 outline-none focus:ring-0 text-sm leading-6 pt-3 pb-1 px-1 placeholder:text-muted/70"
               />
             </div>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  aria-label={`Wybierz rozmówcę (obecnie: ${selectedPersona.name})`}
+                  title={`Rozmówca: ${selectedPersona.name}`}
+                  className={cn(
+                    "shrink-0 inline-flex h-10 w-10 items-center justify-center rounded-full",
+                    "text-muted hover:text-foreground hover:bg-foreground/5 transition-colors"
+                  )}
+                >
+                  <PersonaIcon className="h-5 w-5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                side="top"
+                className="w-[280px] max-h-[60vh] overflow-y-auto"
+              >
+                {PERSONA_ORDER.map((key) => {
+                  const p = PERSONAS[key];
+                  const PIcon = getLucideIcon(p.icon);
+                  const isActive = key === personaKey;
+                  return (
+                    <DropdownMenuItem
+                      key={key}
+                      onSelect={() => handleSelectPersona(key)}
+                      className="flex flex-col items-start gap-0.5 py-2.5"
+                    >
+                      <div className="flex w-full items-center gap-2">
+                        <PIcon className="h-4 w-4 text-foreground/80" />
+                        <span className="text-sm font-medium">{p.name}</span>
+                        {isActive && (
+                          <Check className="ml-auto h-3.5 w-3.5 text-foreground/70" />
+                        )}
+                      </div>
+                      <p className="text-[11px] text-muted leading-snug pl-6">
+                        {p.description}
+                      </p>
+                    </DropdownMenuItem>
+                  );
+                })}
+              </DropdownMenuContent>
+            </DropdownMenu>
 
             {showSend && (
               <button

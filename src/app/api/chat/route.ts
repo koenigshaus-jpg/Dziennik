@@ -5,7 +5,6 @@ import {
   buildSystemPrompt,
   getChatProvider,
   getPersona,
-  getVariant,
   type ChatRequestPayload,
   type PersonaKey,
 } from "@/lib/agent";
@@ -19,7 +18,6 @@ function isValidPayload(value: unknown): value is ChatRequestPayload {
   return (
     Array.isArray(v.messages) &&
     typeof v.personaKey === "string" &&
-    typeof v.personaVariant === "string" &&
     typeof v.deepMode === "boolean" &&
     typeof v.day === "string" &&
     Array.isArray(v.dayEntries) &&
@@ -50,17 +48,9 @@ export async function POST(req: Request) {
   }
 
   const persona = getPersona(body.personaKey as PersonaKey);
-  if (!persona) {
-    return NextResponse.json(
-      { error: "Nieznana persona." },
-      { status: 400 }
-    );
-  }
-  const variant = getVariant(body.personaKey as PersonaKey, body.personaVariant);
 
   const systemPrompt = buildSystemPrompt({
     persona,
-    variant,
     day: body.day,
     dayEntries: body.dayEntries,
     otherEntries: body.otherEntries,

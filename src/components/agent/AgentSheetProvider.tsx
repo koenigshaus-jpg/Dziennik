@@ -3,10 +3,13 @@
 import * as React from "react";
 
 import { AgentSheet } from "./AgentSheet";
+import type { PersonaKey } from "@/lib/agent/types";
 
 interface OpenOptions {
   day: string;
   initialMessage?: string;
+  /** Wymusza personę przy otwarciu (np. wybór z ComposerBar). */
+  personaKey?: PersonaKey;
 }
 
 interface AgentSheetContextValue {
@@ -33,6 +36,7 @@ interface State {
   open: boolean;
   day: string;
   initialMessage: string | undefined;
+  personaKey: PersonaKey | undefined;
   /** Każde otwarcie podbija kluczem — pozwala AgentSheet zresetować useChat. */
   openKey: number;
 }
@@ -46,6 +50,7 @@ export function AgentSheetProvider({
     open: false,
     day: todayIso(),
     initialMessage: undefined,
+    personaKey: undefined,
     openKey: 0,
   });
 
@@ -54,6 +59,7 @@ export function AgentSheetProvider({
       open: true,
       day: opts.day,
       initialMessage: opts.initialMessage,
+      personaKey: opts.personaKey,
       openKey: s.openKey + 1,
     }));
   }, []);
@@ -75,6 +81,7 @@ export function AgentSheetProvider({
           key={state.openKey}
           day={state.day}
           initialMessage={state.initialMessage}
+          initialPersonaKey={state.personaKey}
           onClose={closeSheet}
         />
       )}
