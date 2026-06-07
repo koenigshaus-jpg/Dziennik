@@ -4,7 +4,7 @@ import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import * as LucideIcons from "lucide-react";
 import Link from "next/link";
-import { X, Settings, LogOut, Loader2 } from "lucide-react";
+import { X, Settings, LogOut, Loader2, Tag as TagIcon } from "lucide-react";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -162,6 +162,16 @@ export function HamburgerDrawer({ open, onOpenChange }: Props) {
                   >
                     <Settings className="h-4 w-4" />
                     Ustawienia
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    href="/ustawienia/tagi"
+                    onClick={() => onOpenChange(false)}
+                    className="flex items-center gap-3 px-3 h-11 rounded-md text-sm hover:bg-foreground/5"
+                  >
+                    <TagIcon className="h-4 w-4" />
+                    Tagi
                   </Link>
                 </li>
                 <li>

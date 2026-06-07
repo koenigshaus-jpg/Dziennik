@@ -418,3 +418,155 @@ export async function listAllTagsWithCount(): Promise<
     .filter((t) => t.count > 0)
     .sort((a, b) => b.count - a.count);
 }
+
+function normalizeTagName(s: string): string {
+  return s.trim().toLowerCase().replace(/\s+/g, "-").slice(0, 40);
+}
+
+/**
+ * Zmiana nazwy tagu. Jeśli docelowa nazwa już istnieje — łączy: wszystkie
+ * wpisy ze starego tagu dostają nowy, stary tag jest usuwany.
+ * Jeśli docelowa nie istnieje — zwykły UPDATE.
+ * Po sukcesie emituje `entries-changed` dla każdego dotkniętego wpisu.
+ */
+export async function renameTag(
+  oldName: string,
+  newName: string
+): Promise<{ merged: boolean }> {
+  const userId = await requireUserId();
+  const supabase = getSupabaseClient();
+  const fromN = normalizeTagName(oldName);
+  const toN = normalizeTagName(newName);
+  if (!fromN || !toN) throw new Error("Nazwa tagu nie może być pusta.");
+  if (fromN === toN) return { merged: false };
+
+  // Pobierz źródłowy + ewentualny docelowy
+  const { data: srcRows, error: srcErr } = await supabase
+    .from("tags")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("name", fromN)
+    .maybeSingle();
+  if (srcErr) throw srcErr;
+  if (!srcRows) throw new Error(`Tag "${oldName}" nie istnieje.`);
+  const sourceId = srcRows.id as string;
+
+  const { data: dstRows, error: dstErr } = await supabase
+    .from("tags")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("name", toN)
+    .maybeSingle();
+  if (dstErr) throw dstErr;
+
+  // Lista wpisów dotkniętych zmianą — potrzebna do emisji eventów.
+  const { data: linkRows, error: linkErr } = await supabase
+    .from("entry_tags")
+    .select("entry_id")
+    .eq("tag_id", sourceId);
+  if (linkErr) throw linkErr;
+  const affectedEntryIds = Array.from(
+    new Set((linkRows ?? []).map((r) => r.entry_id as string))
+  );
+
+  let merged = false;
+  if (!dstRows) {
+    // Prosty rename
+    const { error } = await supabase
+      .from("tags")
+      .update({ name: toN })
+      .eq("id", sourceId);
+    if (error) throw error;
+  } else {
+    merged = true;
+    const targetId = dstRows.id as string;
+    if (affectedEntryIds.length > 0) {
+      // Wpisy które już mają target tag — tylko usuwamy źródło.
+      const { data: existingTargetLinks, error: etlErr } = await supabase
+        .from("entry_tags")
+        .select("entry_id")
+        .eq("tag_id", targetId)
+        .in("entry_id", affectedEntryIds);
+      if (etlErr) throw etlErr;
+      const alreadyHasTarget = new Set(
+        (existingTargetLinks ?? []).map((r) => r.entry_id as string)
+      );
+      const needTargetLink = affectedEntryIds.filter(
+        (id) => !alreadyHasTarget.has(id)
+      );
+      if (needTargetLink.length > 0) {
+        const { error: insErr } = await supabase
+          .from("entry_tags")
+          .insert(
+            needTargetLink.map((entry_id) => ({
+              entry_id,
+              tag_id: targetId,
+            }))
+          );
+        if (insErr) throw insErr;
+      }
+      // Usuń źródłowe linki
+      const { error: delLnkErr } = await supabase
+        .from("entry_tags")
+        .delete()
+        .eq("tag_id", sourceId);
+      if (delLnkErr) throw delLnkErr;
+    }
+    // Usuń źródłowy tag
+    const { error: delTagErr } = await supabase
+      .from("tags")
+      .delete()
+      .eq("id", sourceId);
+    if (delTagErr) throw delTagErr;
+  }
+
+  for (const id of affectedEntryIds) {
+    emitChanged({ id, kind: "update" });
+  }
+  return { merged };
+}
+
+/**
+ * Usuwa tag i wszystkie jego przypisania do wpisów. Same wpisy zostają.
+ */
+export async function deleteTag(name: string): Promise<void> {
+  const userId = await requireUserId();
+  const supabase = getSupabaseClient();
+  const n = normalizeTagName(name);
+  if (!n) return;
+
+  const { data: tagRow, error: tagErr } = await supabase
+    .from("tags")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("name", n)
+    .maybeSingle();
+  if (tagErr) throw tagErr;
+  if (!tagRow) return;
+  const tagId = tagRow.id as string;
+
+  const { data: linkRows, error: linkErr } = await supabase
+    .from("entry_tags")
+    .select("entry_id")
+    .eq("tag_id", tagId);
+  if (linkErr) throw linkErr;
+  const affectedEntryIds = Array.from(
+    new Set((linkRows ?? []).map((r) => r.entry_id as string))
+  );
+
+  const { error: delLnkErr } = await supabase
+    .from("entry_tags")
+    .delete()
+    .eq("tag_id", tagId);
+  if (delLnkErr) throw delLnkErr;
+
+  const { error: delTagErr } = await supabase
+    .from("tags")
+    .delete()
+    .eq("id", tagId);
+  if (delTagErr) throw delTagErr;
+
+  for (const id of affectedEntryIds) {
+    emitChanged({ id, kind: "update" });
+  }
+}
