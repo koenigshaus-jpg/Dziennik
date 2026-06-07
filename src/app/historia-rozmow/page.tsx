@@ -5,9 +5,9 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
 import { AppShell } from "@/components/AppShell";
-import { AgentSettingsSection } from "@/components/agent/AgentSettingsSection";
+import { ConversationsHistorySection } from "@/components/agent/ConversationsHistorySection";
 
-export default function UstawieniaPage() {
+export default function HistoriaRozmowPage() {
   return (
     <AppShell>
       <header className="flex items-center gap-3 mb-6">
@@ -18,11 +18,11 @@ export default function UstawieniaPage() {
         >
           <ArrowLeft className="h-5 w-5" />
         </Link>
-        <h1 className="text-2xl font-display font-bold">Ustawienia agenta</h1>
+        <h1 className="text-2xl font-display font-bold">Historia rozmów</h1>
       </header>
 
       <div className="pb-16">
-        <AgentSettingsSection />
+        <ConversationsHistorySection />
       </div>
     </AppShell>
   );

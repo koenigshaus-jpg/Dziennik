@@ -100,7 +100,7 @@ export function HamburgerDrawer({ open, onOpenChange }: Props) {
                 </span>
                 {conversations.length > 0 && (
                   <Link
-                    href="/ustawienia"
+                    href="/historia-rozmow"
                     onClick={() => onOpenChange(false)}
                     className="text-[11px] text-muted hover:text-foreground"
                   >
