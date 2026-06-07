@@ -1,7 +1,7 @@
 # PRD — Agent AI w Dzienniku
 
-Wersja: 0.1 (MVP)
-Status: do akceptacji
+Wersja: 0.2 (MVP — decyzje zatwierdzone)
+Status: gotowy do implementacji
 Powiązane: [PRD.md](PRD.md), [CLAUDE.md](CLAUDE.md)
 
 ---
@@ -30,17 +30,22 @@ Charakter notatnika: codzienny asystent z lekkim biznesowo-zawodowym zabarwienie
 - Lekki indeks wszystkich wpisów (id, data, tytuł, snippet 150 znaków, tagi, nastrój) załączany do promptu — zamiast RAG-a.
 - Tool `fetchEntry(id)` po stronie klienta, gdy model chce pełną treść konkretnego wpisu z indeksu.
 - Persystencja rozmów w IndexedDB (osobny store `conversations`), przypisanie do dnia (`day: YYYY-MM-DD`).
+- **Wiele rozmów per dzień per persona** — „Nowa rozmowa" w kebab menu sheet'a; powrót do persony w danym dniu otwiera ostatnią rozmowę.
+- **Auto-generowany tytuł rozmowy** — po 2. odpowiedzi assistant taniutki call `gpt-4o-mini` generuje 3–5 słów (np. „Decyzja o zmianie pracy"); do tego czasu placeholder „Rozmowa z [persona]".
+- **Tryb głęboki per persona** — toggle w `/ustawienia` per persona, podmienia default `gpt-4o-mini` → `gpt-4o`. Off domyślnie. Stanie się persistent w localStorage.
+- **Modal ostrzegawczy dla wariantu „Brutalny redaktor"** — jednorazowy przy pierwszym wyborze, flaga `agent.brutal-warning-seen` w localStorage.
 - Widoczność rozmów: badge persony na karcie wpisu w `/historia`, kropka w kalendarzu, sekcja „Historia rozmów" w ustawieniach.
 - Dyktowanie: reuse istniejącego `useStt` (route `/api/transcribe` już działa, model `gpt-4o-mini-transcribe`).
 - Streaming odpowiedzi tokeny-po-tokenach.
 - Anulowanie odpowiedzi (przycisk stop).
-- Ustawienia agenta jako nowa sekcja `/ustawienia` (lub bottom sheet — patrz §6.5).
+- Ustawienia agenta jako nowa strona `/ustawienia` (potwierdzone — patrz §6.5).
 
 ### Poza MVP (kolejne iteracje)
 
 - RAG na embeddingach (`text-embedding-3-small`, liczony przy każdym `createEntry`/`updateEntry`, przechowywany w IndexedDB obok wpisu).
 - Tool calling do tworzenia / edycji wpisów przez agenta (na MVP agent tylko czyta).
-- Multi-konwersacja w obrębie jednego dnia z eksportem do PDF.
+- Edycja wysłanych wiadomości użytkownika z regeneracją odpowiedzi (na MVP wysłane = wysłane).
+- Eksport rozmowy do PDF.
 - Realtime API (voice-to-voice bez tekstu pośredniego).
 - Telemetria kosztów tokenów per użytkownik / persona.
 - Synchronizacja rozmów między urządzeniami (kiedy zrobisz sync wpisów).
@@ -186,7 +191,7 @@ Warianty:
 1. **Eksperymentator iteracyjny** — szybkie prototypowanie pomysłu, „co najmniejsza wersja tego mogłaby wyglądać?", iteracja.
 2. **Krytyk życzliwy (braintrust)** — bezpieczna, ale szczera krytyka. Wskazuje co nie działa, ale zawsze proponuje kierunek poprawy.
 3. **Łącznik systemowy** — szuka połączeń między pomysłami z różnych wpisów, polimat, przekrojowe metafory.
-4. **Brutalny redaktor** — bez ceregieli wytyka słabe miejsca pisania i myślenia. Cięcie zbędnych słów, surowa konkretność. (Ostrzeżenie w opisie.)
+4. **Brutalny redaktor** — bez ceregieli wytyka słabe miejsca pisania i myślenia. Cięcie zbędnych słów, surowa konkretność. **Wymaga jednorazowego potwierdzenia przy pierwszym wyborze** (modal: „Ten wariant jest celowo bezpardonowy w krytyce. Wybierając go, zgadzasz się na ostry feedback."); flaga `agent.brutal-warning-seen` w localStorage.
 5. **Generator dywergentny** — 5 wariantów na każde pytanie, nieoczywiste perspektywy, „spróbuj odwrotnie".
 
 ### 5.7 Mentor produktywności / GTD (`productivity`)
@@ -269,6 +274,7 @@ type ChatRequestPayload = {
   messages: { role: 'user' | 'assistant'; content: string }[];
   personaKey: PersonaKey;            // np. 'stoic'
   personaVariant: string;            // np. 'epictetus'
+  deepMode: boolean;                 // czytane z localStorage `agent.deepMode.<personaKey>`
   day: string;                       // YYYY-MM-DD — dzień w którym user się znajduje
   dayEntries: {
     id: string;
@@ -343,6 +349,7 @@ type Conversation = {
   day: string;             // YYYY-MM-DD — dzień przypisania
   personaKey: PersonaKey;
   personaVariant: string;
+  title: string | null;    // null do czasu auto-generacji po 2. odpowiedzi assistant
   createdAt: number;
   updatedAt: number;
   messages: ConversationMessage[];
@@ -358,19 +365,23 @@ type ConversationMessage = {
 };
 ```
 
-Operacje w `src/lib/conversations-client.ts` (mirror `db-client.ts`): `createConversation`, `appendMessage`, `listConversations`, `listConversationsByDay`, `deleteConversation`. Każda mutacja dispatchuje `window` `CustomEvent('conversations-changed')`.
+Operacje w `src/lib/conversations-client.ts` (mirror `db-client.ts`): `createConversation`, `appendMessage`, `setTitle`, `listConversations`, `listConversationsByDay`, `listConversationsByDayAndPersona`, `deleteConversation`. Każda mutacja dispatchuje `window` `CustomEvent('conversations-changed')`.
+
+**Auto-generacja tytułu**: po zapisaniu 2. wiadomości assistant w danej rozmowie, `AgentSheet` wywołuje `/api/chat/title` (osobny lekki endpoint) z payload `{ firstUserMessage, firstAssistantMessage }`. Model `gpt-4o-mini`, temperature 0.3, system prompt: „Wygeneruj zwięzły 3-5 słowny tytuł rozmowy po polsku. Zwróć tylko tytuł, bez cudzysłowów.". Wynik zapisuje przez `setTitle(id, title)`. Do czasu wygenerowania UI pokazuje placeholder „Rozmowa z [persona]".
 
 ### 6.8 Modele i koszty
 
-| Persona | Default model | Temperature | Uzasadnienie |
-|---|---|---|---|
-| Doradca | `gpt-4o-mini` | 0.3 | Konkretne odpowiedzi, niski koszt; eskalacja do `gpt-4o` przez override w ustawieniach. |
-| Psychoterapeuta | `gpt-4o-mini` | 0.5 | Wrażliwy temat, ale mini wystarcza; możliwy override do `gpt-4o`. |
-| Filozof | `gpt-4o-mini` | 0.6 | Wymaga głębi — to najczęstszy kandydat do upgrade'u do `gpt-4o`. |
-| Coach kariery | `gpt-4o-mini` | 0.4 | Pragmatyka + ciepło. |
-| Stoik | `gpt-4o-mini` | 0.3 | Krótkie, suche odpowiedzi — mini wystarcza z naddatkiem. |
-| Kreatywny | `gpt-4o-mini` | 0.7 | Dywergencja — wyższa temperatura ważniejsza niż większy model. |
-| Produktywność | `gpt-4o-mini` | 0.3 | Strukturyzowane odpowiedzi. |
+| Persona | Default model | Deep model | Temperature | Uzasadnienie |
+|---|---|---|---|---|
+| Doradca | `gpt-4o-mini` | `gpt-4o` | 0.3 | Konkretne odpowiedzi, niski koszt; deep mode dla strategicznych decyzji. |
+| Psychoterapeuta | `gpt-4o-mini` | `gpt-4o` | 0.5 | Wrażliwy temat, mini wystarcza; deep mode dla trudniejszych rozmów. |
+| Filozof | `gpt-4o-mini` | `gpt-4o` | 0.6 | Wymaga głębi — najczęstszy kandydat do włączenia deep mode. |
+| Coach kariery | `gpt-4o-mini` | `gpt-4o` | 0.4 | Pragmatyka + ciepło. |
+| Stoik | `gpt-4o-mini` | `gpt-4o` | 0.3 | Krótkie, suche odpowiedzi — mini wystarcza z naddatkiem. |
+| Kreatywny | `gpt-4o-mini` | `gpt-4o` | 0.7 | Dywergencja — wyższa temperatura ważniejsza niż większy model. |
+| Produktywność | `gpt-4o-mini` | `gpt-4o` | 0.3 | Strukturyzowane odpowiedzi. |
+
+**Tryb głęboki (deep mode)**: per persona toggle w `/ustawienia` → „Asystent AI" → karta każdej persony ma switch „Tryb głęboki (gpt-4o, ~15× droższy)". Stan w localStorage pod kluczem `agent.deepMode.<personaKey>` (boolean). Klient odczytuje przed wysłaniem requestu i wstawia odpowiedni model do `ChatRequestPayload`. Domyślnie OFF dla wszystkich.
 
 Strategia oszczędzania tokenów:
 
@@ -415,9 +426,10 @@ Szacunek dla typowej rozmowy (10 wpisów w dniu, 50 w indeksie, 5 wymian):
 
 ### Etap 2 — Storage rozmów
 
-- [ ] `src/lib/conversations-client.ts` (IndexedDB)
+- [ ] `src/lib/conversations-client.ts` (IndexedDB) — CRUD + `setTitle`
 - [ ] Event `conversations-changed`
-- [ ] Hook `useConversationsByDay(day)`, `useConversation(id)`
+- [ ] Hook `useConversationsByDay(day)`, `useConversation(id)`, `useConversationsByDayAndPersona(day, personaKey)`
+- [ ] `src/app/api/chat/title/route.ts` — endpoint generujący tytuł rozmowy
 
 ### Etap 3 — UI rozmowy
 
@@ -426,12 +438,16 @@ Szacunek dla typowej rozmowy (10 wpisów w dniu, 50 w indeksie, 5 wymian):
 - [ ] Streaming UI (`useChat` z `@ai-sdk/react`), tool execution `fetchEntry` client-side
 - [ ] Kebab menu: zmiana persony w trakcie rozmowy, nowa rozmowa, usuń rozmowę
 - [ ] Stany: queued / sending / streaming / aborted / error
+- [ ] Trigger auto-tytułu po 2. odpowiedzi assistant (wywołanie `/api/chat/title`)
+- [ ] Modal ostrzegawczy przy pierwszym wyborze wariantu „Brutalny redaktor" (flaga `agent.brutal-warning-seen`)
 
-### Etap 4 — Widoczność rozmów
+### Etap 4 — Widoczność rozmów + ustawienia
 
 - [ ] Badge persony na karcie wpisu w `/historia` (mobile lista + desktop preview)
 - [ ] Kropka w kalendarzu (mobile `CalendarSheet` + desktop `DesktopCalendarPopover`)
-- [ ] `/ustawienia` — sekcja „Asystent AI" (wybór wariantów per persona, default persona, override modelu) + „Historia rozmów" (lista z filtrami)
+- [ ] Nowa strona `/ustawienia` + link w `BottomNav` (mobile) i `TopNav` (desktop)
+- [ ] Sekcja „Asystent AI" — wybór wariantów per persona, default persona, toggle „Tryb głęboki" per persona
+- [ ] Sekcja „Historia rozmów" — lista chronologiczna z filtrami (multiselect persony, zakres dat, fulltext)
 
 ### Etap 5 — Polish
 
@@ -448,14 +464,16 @@ Szacunek dla typowej rozmowy (10 wpisów w dniu, 50 w indeksie, 5 wymian):
 
 ---
 
-## 9. Otwarte pytania (do decyzji przed startem implementacji)
+## 9. Zatwierdzone decyzje
 
-1. **Eskalacja modelu**: czy dodać w ustawieniach przełącznik „głęboki tryb" per persona, który podmienia `gpt-4o-mini` → `gpt-4o`? (Sugerowane: tak, ale poza MVP.)
-2. **Tytuł rozmowy**: auto-generowany przez model po 2 wymianach (tani call `gpt-4o-mini`) czy zostaje „Rozmowa z [persona] · 12 marca"? (Sugerowane: auto-generowany — UX zysk wart 1 grosza.)
-3. **Wielokrotne rozmowy tej samej persony w tym samym dniu**: czy dozwolone? (Sugerowane: tak, „Nowa rozmowa" w kebabie zaczyna kolejną.)
-4. **Edycja wiadomości użytkownika po wysłaniu**: tak / nie? (Sugerowane: nie w MVP — KIS.)
-5. **Brutalny redaktor**: czy ostrzeżenie przed wyborem wariantu („Ten wariant jest celowo bezpardonowy")? (Sugerowane: tak, jeden raz przy pierwszym wyborze.)
-6. **`/ustawienia` jako route czy sheet**: nowa strona vs panel wysuwany. (Sugerowane: nowa route `/ustawienia` — łatwiej rozbudowywać.)
+| # | Pytanie | Decyzja |
+|---|---|---|
+| 1 | Tryb głęboki (gpt-4o-mini → gpt-4o) | **Tak, w MVP** — toggle per persona w `/ustawienia`, stan w localStorage `agent.deepMode.<personaKey>`, default OFF. |
+| 2 | Tytuł rozmowy | **Auto-generowany** po 2. odpowiedzi assistant, osobny endpoint `/api/chat/title`, model `gpt-4o-mini`. Do tego czasu placeholder „Rozmowa z [persona]". |
+| 3 | Wiele rozmów per persona per dzień | **Tak** — „Nowa rozmowa" w kebabie sheet'a. Powrót do persony w danym dniu otwiera ostatnią rozmowę. |
+| 4 | Edycja wysłanych wiadomości | **Nie w MVP**. Przeniesione do „Poza MVP". |
+| 5 | Ostrzeżenie dla „Brutalnego redaktora" | **Tak, jednorazowy modal** przy pierwszym wyborze, flaga `agent.brutal-warning-seen` w localStorage. |
+| 6 | Lokalizacja ustawień agenta | **Nowa route `/ustawienia`** + link w `BottomNav` (mobile) i `TopNav` (desktop). |
 
 ---
 

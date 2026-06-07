@@ -88,49 +88,57 @@ export function CalendarSheet({
     return arr;
   }, [today]);
 
-  // Po otwarciu kalendarza: scroll do miesiąca wybranego dnia (bez animacji).
-  // Radix renderuje Content przez Portal i animuje slide-in-from-bottom, więc
-  // próbujemy kilka razy, aż scrollRef + monthRefs zostaną zamontowane i będą
-  // miały sensowne wymiary. Bez tego pierwsze otwarcie ląduje na najstarszym
-  // miesiącu (scrollTop=0) i trzeba długo przewijać do dziś.
+  // Wspólna funkcja scroll do miesiąca — używana zarówno przy otwarciu jak
+  // i przy kliknięciu "Dziś".
+  const scrollToMonth = React.useCallback(
+    (target: Date, behavior: ScrollBehavior) => {
+      const key = monthKey(startOfMonth(target));
+      const container = scrollRef.current;
+      const el = monthRefs.current.get(key);
+      if (!container || !el) return false;
+      const containerTop = container.getBoundingClientRect().top;
+      const elTop = el.getBoundingClientRect().top;
+      container.scrollTo({
+        top: container.scrollTop + elTop - containerTop,
+        behavior,
+      });
+      return true;
+    },
+    []
+  );
+
+  // Po otwarciu kalendarza: scroll do miesiąca wybranego dnia.
+  // Problem: Radix renderuje Content przez Portal i animuje slide-in-from-bottom
+  // (~250ms). W trakcie animacji getBoundingClientRect zwraca przesunięte
+  // wartości i scroll trafia w zły miesiąc. Dlatego:
+  // 1) wykonujemy pierwszą próbę natychmiast (gdy animacja ma `from` state),
+  // 2) ponawiamy po animationend / 300ms na wypadek gdyby (1) nie zadziałał.
   React.useEffect(() => {
     if (!open) return;
     const target = selected ?? today;
-    const key = monthKey(startOfMonth(target));
     let cancelled = false;
-    let attempts = 0;
 
-    const tryScroll = () => {
+    // Wymuszamy reflow po zamontowaniu, potem scroll.
+    const raf = requestAnimationFrame(() => {
       if (cancelled) return;
-      const container = scrollRef.current;
-      const el = monthRefs.current.get(key);
-      if (container && el && container.clientHeight > 0) {
-        const containerTop = container.getBoundingClientRect().top;
-        const elTop = el.getBoundingClientRect().top;
-        container.scrollTop += elTop - containerTop;
-        return;
-      }
-      if (attempts++ < 20) {
-        requestAnimationFrame(tryScroll);
-      }
-    };
+      scrollToMonth(target, "instant" as ScrollBehavior);
+    });
 
-    requestAnimationFrame(tryScroll);
+    // Re-try po zakończeniu animacji wjazdu Radix.
+    const t = setTimeout(() => {
+      if (cancelled) return;
+      scrollToMonth(target, "instant" as ScrollBehavior);
+    }, 320);
+
     return () => {
       cancelled = true;
+      cancelAnimationFrame(raf);
+      clearTimeout(t);
     };
-  }, [open, selected, today]);
+  }, [open, selected, today, scrollToMonth]);
 
   function scrollToToday() {
-    const key = monthKey(startOfMonth(today));
-    const el = monthRefs.current.get(key);
-    if (!el || !scrollRef.current) return;
-    const containerTop = scrollRef.current.getBoundingClientRect().top;
-    const elTop = el.getBoundingClientRect().top;
-    scrollRef.current.scrollTo({
-      top: scrollRef.current.scrollTop + elTop - containerTop,
-      behavior: "smooth",
-    });
+    scrollToMonth(today, "smooth");
   }
 
   return (
