@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { seedGuestEntries } from "@/lib/seed-guest";
 
 type EmailMode = "signin" | "signup";
 
@@ -50,6 +51,14 @@ function LoginForm() {
       );
       setGuestLoading(false);
       return;
+    }
+    // Seed przykładowych wpisów dla świeżego konta gościa.
+    // Idempotentne — jeśli wpisy już są, nic nie robi.
+    try {
+      await seedGuestEntries();
+    } catch (e) {
+      // Nie blokujemy wejścia w razie błędu seeda.
+      console.error("seedGuestEntries failed:", e);
     }
     router.push(next);
     router.refresh();
