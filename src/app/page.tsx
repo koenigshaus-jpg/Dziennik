@@ -130,17 +130,16 @@ function HomePageInner() {
     "smooth" | "auto"
   >("auto");
 
-  // Initial mount: jeśli selectedDay ≠ today, ustaw strip na ten dzień
-  // INSTANT (bez animacji) — powrót z edycji wpisu ma być w pozycji końcowej.
+  // Initial mount: zawsze scrolluj strip do selectedDay (domyślnie today).
+  // INSTANT (bez animacji) — bez tego strip startuje na lewej krawędzi
+  // okna (najstarszy dzień) i trzeba ręcznie scrollować do dziś.
   const didInitialScrollRef = useRef(false);
   useEffect(() => {
     if (didInitialScrollRef.current) return;
     didInitialScrollRef.current = true;
-    if (selectedDay !== todayIso) {
-      setStripScrollBehavior("auto");
-      setStripScrollTarget(selectedDay);
-      setStripScrollTrigger((c) => c + 1);
-    }
+    setStripScrollBehavior("auto");
+    setStripScrollTarget(selectedDay);
+    setStripScrollTrigger((c) => c + 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
