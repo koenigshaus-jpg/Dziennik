@@ -1,4 +1,4 @@
-import type { PersonaConfig, PersonaVariant, EntryFull, EntryIndexItem } from "./types";
+import type { PersonaConfig, PersonaVariant, EntryFull } from "./types";
 
 interface BuildSystemPromptOptions {
   persona: PersonaConfig;
@@ -7,24 +7,19 @@ interface BuildSystemPromptOptions {
   day: string;
   /** Pełna treść wpisów z tego dnia. */
   dayEntries: EntryFull[];
-  /** Indeks wszystkich pozostałych wpisów. */
-  entriesIndex: EntryIndexItem[];
+  /** Pełne wpisy ze wszystkich pozostałych dni (z polem date). */
+  otherEntries: EntryFull[];
 }
-
-const MAX_INDEX_ITEMS = 80; // limit żeby kontekst nie eksplodował na bardzo długiej historii
 
 /**
  * Składa system prompt z 4 sekcji w stałej kolejności:
  *  1) bazowy prompt persony
  *  2) fragment wariantu (konkretna szkoła / postać)
  *  3) kontekst dnia (pełne wpisy)
- *  4) lekki indeks pozostałych wpisów (do tool calling)
- *
- * Kolejność jest stała — to pozwala OpenAI cacheować prefix po stronie API
- * (prompt caching ~50% taniej dla powtarzających się prefixów).
+ *  4) pełne wpisy z pozostałych dni
  */
 export function buildSystemPrompt(opts: BuildSystemPromptOptions): string {
-  const { persona, variant, day, dayEntries, entriesIndex } = opts;
+  const { persona, variant, day, dayEntries, otherEntries } = opts;
 
   const parts: string[] = [];
 
@@ -39,35 +34,28 @@ export function buildSystemPrompt(opts: BuildSystemPromptOptions): string {
     parts.push("\nUżytkownik nie ma żadnych wpisów z tego dnia.\n");
   } else {
     parts.push(`\nWpisy z tego dnia (${dayEntries.length}):\n`);
-    dayEntries.forEach((entry, idx) => {
-      parts.push(`\n[Wpis ${idx + 1}${entry.title ? ` — ${entry.title}` : ""}]\n`);
-      if (entry.mood) parts.push(`Nastrój: ${entry.mood}\n`);
-      if (entry.tags?.length) parts.push(`Tagi: ${entry.tags.join(", ")}\n`);
-      parts.push("\n");
-      parts.push(entry.plainText.trim());
-      parts.push("\n");
-    });
+    renderEntries(dayEntries, parts);
   }
 
-  if (entriesIndex.length > 0) {
-    const trimmed = entriesIndex.slice(0, MAX_INDEX_ITEMS);
-    parts.push(
-      `\n— — —\n\nINDEKS POZOSTAŁYCH WPISÓW (${trimmed.length}${
-        entriesIndex.length > trimmed.length ? ` z ${entriesIndex.length}` : ""
-      })\n`
-    );
-    parts.push(
-      "Każdy wpis: [id] data | tytuł | snippet | tagi. Gdy potrzebujesz pełnej treści wpisu, wywołaj narzędzie fetchEntry z jego id.\n\n"
-    );
-    trimmed.forEach((item) => {
-      const title = item.title ? ` | ${item.title}` : "";
-      const tags = item.tags?.length ? ` | #${item.tags.join(" #")}` : "";
-      const snippet = item.snippet.replace(/\s+/g, " ").trim();
-      parts.push(`[${item.id}] ${item.date}${title} | ${snippet}${tags}\n`);
-    });
+  if (otherEntries.length > 0) {
+    parts.push(`\n— — —\n\nPOZOSTAŁE WPISY Z DZIENNIKA (${otherEntries.length})\n`);
+    parts.push("Wpisy z poprzednich dni — pełna treść dostępna poniżej:\n");
+    renderEntries(otherEntries, parts, true);
   }
 
   return parts.join("");
+}
+
+function renderEntries(entries: EntryFull[], parts: string[], showDate = false) {
+  entries.forEach((entry, idx) => {
+    const dateLabel = showDate && entry.date ? ` — ${formatDayPl(entry.date)}` : "";
+    parts.push(`\n[Wpis ${idx + 1}${dateLabel}${entry.title ? ` — ${entry.title}` : ""}]\n`);
+    if (entry.mood) parts.push(`Nastrój: ${entry.mood}\n`);
+    if (entry.tags?.length) parts.push(`Tagi: ${entry.tags.join(", ")}\n`);
+    parts.push("\n");
+    parts.push(entry.plainText.trim());
+    parts.push("\n");
+  });
 }
 
 const MONTHS_PL = [

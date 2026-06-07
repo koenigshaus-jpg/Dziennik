@@ -299,7 +299,7 @@ function AgentChatInstance({
       new DefaultChatTransport({
         api: "/api/chat",
         prepareSendMessagesRequest: async ({ messages }) => {
-          const { dayEntries, entriesIndex } = await buildEntriesContext(day);
+          const { dayEntries, otherEntries } = await buildEntriesContext(day);
           const plain = messages.map((m) => ({
             role: m.role as "user" | "assistant",
             content: extractText(m),
@@ -312,7 +312,7 @@ function AgentChatInstance({
               deepMode: getDeepMode(personaKey),
               day,
               dayEntries,
-              entriesIndex,
+              otherEntries,
             },
           };
         },

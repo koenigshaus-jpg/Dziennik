@@ -2,21 +2,46 @@
 
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
+import * as LucideIcons from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { X, Settings, LogOut, Loader2 } from "lucide-react";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import { PERSONAS } from "@/lib/agent/personas";
+import { useConversationsMeta } from "@/lib/agent/use-conversations-meta";
+import { useAgentSheet } from "@/components/agent/AgentSheetProvider";
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
+function getIcon(name: string): React.ComponentType<{ className?: string }> {
+  const lib = LucideIcons as unknown as Record<
+    string,
+    React.ComponentType<{ className?: string }>
+  >;
+  return lib[name] ?? lib.Sparkles;
+}
+
+const MONTHS_SHORT = [
+  "sty", "lut", "mar", "kwi", "maj", "cze",
+  "lip", "sie", "wrz", "paź", "lis", "gru",
+];
+
+function formatDayShort(iso: string): string {
+  const [, m, d] = iso.split("-").map((s) => parseInt(s, 10));
+  if (!m || !d) return iso;
+  return `${d} ${MONTHS_SHORT[m - 1]}`;
+}
+
 export function HamburgerDrawer({ open, onOpenChange }: Props) {
-  const router = useRouter();
   const [loggingOut, setLoggingOut] = React.useState(false);
+  const { conversations } = useConversationsMeta();
+  const { openSheet } = useAgentSheet();
+
+  const recent = conversations.slice(0, 6);
 
   async function handleLogout() {
     if (loggingOut) return;
@@ -28,8 +53,6 @@ export function HamburgerDrawer({ open, onOpenChange }: Props) {
       console.error("logout failed", e);
     } finally {
       onOpenChange(false);
-      // Hard nav zamiast router.push — gwarantuje że RSC/cache po stronie
-      // serwera nie odda starej, autoryzowanej zawartości.
       window.location.href = "/login";
     }
   }
@@ -67,8 +90,69 @@ export function HamburgerDrawer({ open, onOpenChange }: Props) {
           <DialogPrimitive.Description className="sr-only">
             Menu nawigacji aplikacji
           </DialogPrimitive.Description>
-          <div className="flex-1 overflow-y-auto p-2 flex flex-col gap-4">
-            <nav>
+
+          <div className="flex-1 overflow-y-auto flex flex-col">
+            {/* Historia rozmów */}
+            <div className="px-2 pt-3 pb-1">
+              <div className="flex items-center justify-between px-1 mb-1">
+                <span className="text-[11px] uppercase tracking-wider text-muted font-medium">
+                  Historia rozmów
+                </span>
+                {conversations.length > 0 && (
+                  <Link
+                    href="/ustawienia"
+                    onClick={() => onOpenChange(false)}
+                    className="text-[11px] text-muted hover:text-foreground"
+                  >
+                    Wszystkie
+                  </Link>
+                )}
+              </div>
+
+              {recent.length === 0 ? (
+                <p className="text-xs text-muted px-1 py-2">
+                  Brak rozmów. Użyj mikrofonu lub paska kompozytora.
+                </p>
+              ) : (
+                <ul className="flex flex-col gap-0.5">
+                  {recent.map((c) => {
+                    const p = PERSONAS[c.personaKey];
+                    const Icon = getIcon(p.icon);
+                    const firstUser = c.messages.find((m) => m.role === "user");
+                    const label = c.title ?? firstUser?.content ?? "Rozmowa";
+                    return (
+                      <li key={c.id}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onOpenChange(false);
+                            openSheet({ day: c.day });
+                          }}
+                          className="w-full flex items-center gap-2.5 px-2 h-10 rounded-lg text-left hover:bg-foreground/5 transition-colors"
+                        >
+                          <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-foreground/8">
+                            <Icon className="h-3 w-3" />
+                          </span>
+                          <span className="flex-1 min-w-0">
+                            <span className="block text-sm truncate leading-tight">
+                              {label}
+                            </span>
+                            <span className="block text-[10px] text-muted leading-tight">
+                              {p.name} · {formatDayShort(c.day)}
+                            </span>
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+
+            <div className="border-t border-border/60 mx-3 my-2" />
+
+            {/* Nawigacja */}
+            <nav className="px-2">
               <ul className="flex flex-col gap-1">
                 <li>
                   <Link
@@ -97,7 +181,8 @@ export function HamburgerDrawer({ open, onOpenChange }: Props) {
                 </li>
               </ul>
             </nav>
-            <div className="px-1">
+
+            <div className="px-3 pb-4 mt-2">
               <ThemeSwitcher embedded />
             </div>
           </div>
