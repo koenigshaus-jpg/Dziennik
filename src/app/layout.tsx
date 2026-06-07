@@ -5,6 +5,7 @@ import "./globals.css";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
+import { AgentSheetProvider } from "@/components/agent/AgentSheetProvider";
 
 const inter = Inter({
   subsets: ["latin", "latin-ext"],
@@ -52,9 +53,11 @@ export default function RootLayout({
       </head>
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <ThemeProvider>
-          {children}
-          <ThemeSwitcher />
-          <Toaster position="top-center" richColors />
+          <AgentSheetProvider>
+            {children}
+            <ThemeSwitcher />
+            <Toaster position="top-center" richColors />
+          </AgentSheetProvider>
         </ThemeProvider>
       </body>
     </html>

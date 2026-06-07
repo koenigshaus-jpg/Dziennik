@@ -49,19 +49,11 @@ export interface ChatMessage {
   content: string;
 }
 
-/** Lekki indeks wpisu wysyłany razem z requestem (id+snippet, bez pełnej treści). */
-export interface EntryIndexItem {
-  id: string;
-  date: string; // YYYY-MM-DD
-  title: string | null;
-  snippet: string;
-  mood?: string;
-  tags?: string[];
-}
-
-/** Pełny wpis (treść) wysyłany dla aktualnego dnia. */
+/** Pełny wpis (treść) wysyłany w kontekście agenta. */
 export interface EntryFull {
   id: string;
+  /** Data wpisu YYYY-MM-DD — obecna w wpisach spoza bieżącego dnia. */
+  date?: string;
   title: string | null;
   plainText: string;
   mood?: string;
@@ -78,8 +70,8 @@ export interface ChatRequestPayload {
   day: string;
   /** Pełne wpisy z `day` — zawsze w system prompcie. */
   dayEntries: EntryFull[];
-  /** Lekki indeks WSZYSTKICH wpisów (poza tymi z dnia). */
-  entriesIndex: EntryIndexItem[];
+  /** Pełne wpisy ze wszystkich pozostałych dni (z wypełnionym polem date). */
+  otherEntries: EntryFull[];
 }
 
 /** Payload dla endpointu generującego tytuł rozmowy. */

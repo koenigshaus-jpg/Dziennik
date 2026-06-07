@@ -10,6 +10,7 @@ import {
   toIsoLocalDate,
 } from "@/lib/dates";
 import { cn } from "@/lib/utils";
+import { useConversationsMeta } from "@/lib/agent/use-conversations-meta";
 
 interface Props {
   open: boolean;
@@ -70,6 +71,7 @@ export function CalendarSheet({
 }: Props) {
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
   const monthRefs = React.useRef<Map<string, HTMLElement>>(new Map());
+  const { daysWithConversations } = useConversationsMeta();
 
   const today = React.useMemo(() => new Date(), []);
   const todayIso = React.useMemo(() => toIsoLocalDate(today), [today]);
@@ -233,6 +235,7 @@ export function CalendarSheet({
                         ? isSameLocalDay(c.date, selected)
                         : false;
                       const count = entryCountsByDay.get(c.iso) ?? 0;
+                      const hasConv = daysWithConversations.has(c.iso);
                       return (
                         <button
                           key={c.iso}
@@ -259,16 +262,31 @@ export function CalendarSheet({
                           <span className="leading-none">
                             {c.date.getDate()}
                           </span>
-                          {count > 0 && (
+                          {(count > 0 || hasConv) && (
                             <span
-                              className={cn(
-                                "absolute bottom-1 inline-block h-1 w-1 rounded-full",
-                                isSelected
-                                  ? "bg-background/80"
-                                  : "bg-foreground/70"
-                              )}
+                              className="absolute bottom-1 inline-flex items-center gap-0.5"
                               aria-hidden
-                            />
+                            >
+                              {count > 0 && (
+                                <span
+                                  className={cn(
+                                    "inline-block h-1 w-1 rounded-full",
+                                    isSelected
+                                      ? "bg-background/80"
+                                      : "bg-foreground/70"
+                                  )}
+                                />
+                              )}
+                              {hasConv && (
+                                <span
+                                  className={cn(
+                                    "inline-block h-1 w-1 rounded-full",
+                                    isSelected ? "bg-background/80" : "bg-accent"
+                                  )}
+                                  title="Rozmowa z agentem"
+                                />
+                              )}
+                            </span>
                           )}
                         </button>
                       );

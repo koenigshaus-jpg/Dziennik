@@ -30,9 +30,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { formatWithWeekdayPL, formatTimePL } from "@/lib/dates";
+import { formatWithWeekdayPL, formatTimePL, toIsoLocalDate } from "@/lib/dates";
 import { deleteEntry, getEntry, type ClientEntry } from "@/lib/db-supabase";
 import { EntryForm, type EntryFormHandle } from "./EntryForm";
+import { useConversationsMeta } from "@/lib/agent/use-conversations-meta";
+import { PersonaBadgeRow } from "@/components/agent/PersonaBadge";
 
 interface Props {
   entry: ClientEntry;
@@ -72,13 +74,20 @@ export function EntryEditor({ entry, onUpdated, onDeleted, bodyClassName }: Prop
   }
 
   const date = new Date(entry.createdAt);
+  const { personasByDay } = useConversationsMeta();
+  const dayPersonas = personasByDay.get(toIsoLocalDate(date)) ?? [];
 
   return (
     <div className="flex flex-col gap-5 lg:flex-1 lg:min-h-0">
       <div className="flex items-start justify-between gap-4">
-        <p className="text-sm uppercase tracking-wider text-muted pt-2">
-          {formatWithWeekdayPL(date)} · {formatTimePL(date)}
-        </p>
+        <div className="flex items-center gap-2 pt-2">
+          <p className="text-sm uppercase tracking-wider text-muted">
+            {formatWithWeekdayPL(date)} · {formatTimePL(date)}
+          </p>
+          {dayPersonas.length > 0 && (
+            <PersonaBadgeRow personaKeys={dayPersonas} />
+          )}
+        </div>
         <div className="flex items-center gap-2">
           {audioState.recording ? (
             <button

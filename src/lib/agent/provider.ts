@@ -4,19 +4,19 @@
 
 import type { ChatMessage } from "./types";
 
-export interface ToolDefinition {
-  /** Opis dla modelu — co robi to narzędzie i kiedy je wywołać. */
-  description: string;
-  /** JSON Schema parametrów. */
-  parameters: Record<string, unknown>;
-}
-
 export interface ChatStreamOptions {
   systemPrompt: string;
   messages: ChatMessage[];
   model: string;
   temperature: number;
-  tools?: Record<string, ToolDefinition>;
+  /**
+   * Narzędzia (tools) dla modelu. Format jest specyficzny dla aktualnego providera —
+   * dlatego pole jest opaque (`unknown`). Definicje narzędzi mieszkają w
+   * `src/lib/agent/tools/` i są dopasowane do bieżącego SDK. Przy zmianie providera
+   * trzeba przepisać tools/* na nowy format, ale komponenty UI i route handler
+   * importują je przez stabilny `agentTools` export.
+   */
+  tools?: Record<string, unknown>;
   abortSignal?: AbortSignal;
 }
 

@@ -2,9 +2,9 @@
 
 import * as React from "react";
 import { Mic, Send, Loader2, Square } from "lucide-react";
-import { toast } from "sonner";
 import { useStt } from "@/lib/useStt";
 import { cn } from "@/lib/utils";
+import { useAgentSheet } from "@/components/agent/AgentSheetProvider";
 
 interface Props {
   variant: "mobile" | "desktop";
@@ -25,10 +25,11 @@ function formatSeconds(s: number): string {
 }
 
 export const ComposerBar = React.forwardRef<ComposerBarHandle, Props>(
-  function ComposerBar({ variant, onRecordingChange }, ref) {
+  function ComposerBar({ variant, selectedDay, onRecordingChange }, ref) {
     const [value, setValue] = React.useState("");
     const [sending, setSending] = React.useState(false);
     const inputRef = React.useRef<HTMLTextAreaElement | null>(null);
+    const { openSheet } = useAgentSheet();
 
     const { recording, processing, elapsed, start, stop } = useStt({
       onTranscript: (text) => {
@@ -56,10 +57,8 @@ export const ComposerBar = React.forwardRef<ComposerBarHandle, Props>(
       if (!text || sending) return;
       setSending(true);
       try {
-        // TODO: integracja z AI — na razie tylko placeholder
-        toast.message("Zapytania do AI — wkrótce.");
+        openSheet({ day: selectedDay, initialMessage: text });
         setValue("");
-        inputRef.current?.focus();
       } finally {
         setSending(false);
       }

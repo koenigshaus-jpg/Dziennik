@@ -3,8 +3,10 @@
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import Link from "next/link";
-import { X, Settings, LogOut } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { X, Settings, LogOut, Loader2 } from "lucide-react";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
+import { getSupabaseClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -13,6 +15,25 @@ interface Props {
 }
 
 export function HamburgerDrawer({ open, onOpenChange }: Props) {
+  const router = useRouter();
+  const [loggingOut, setLoggingOut] = React.useState(false);
+
+  async function handleLogout() {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    try {
+      const supabase = getSupabaseClient();
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.error("logout failed", e);
+    } finally {
+      onOpenChange(false);
+      // Hard nav zamiast router.push — gwarantuje że RSC/cache po stronie
+      // serwera nie odda starej, autoryzowanej zawartości.
+      window.location.href = "/login";
+    }
+  }
+
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
@@ -51,7 +72,7 @@ export function HamburgerDrawer({ open, onOpenChange }: Props) {
               <ul className="flex flex-col gap-1">
                 <li>
                   <Link
-                    href="#"
+                    href="/ustawienia"
                     onClick={() => onOpenChange(false)}
                     className="flex items-center gap-3 px-3 h-11 rounded-md text-sm hover:bg-foreground/5"
                   >
@@ -60,13 +81,19 @@ export function HamburgerDrawer({ open, onOpenChange }: Props) {
                   </Link>
                 </li>
                 <li>
-                  <a
-                    href="/api/logout"
-                    className="flex items-center gap-3 px-3 h-11 rounded-md text-sm hover:bg-foreground/5"
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    disabled={loggingOut}
+                    className="w-full flex items-center gap-3 px-3 h-11 rounded-md text-sm hover:bg-foreground/5 disabled:opacity-70"
                   >
-                    <LogOut className="h-4 w-4" />
-                    Wyloguj
-                  </a>
+                    {loggingOut ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <LogOut className="h-4 w-4" />
+                    )}
+                    {loggingOut ? "Wylogowuję…" : "Wyloguj"}
+                  </button>
                 </li>
               </ul>
             </nav>

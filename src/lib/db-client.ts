@@ -2,9 +2,7 @@
 // dane przeżywają restart Vercela, telefonu, przeglądarki.
 // NIE synchronizują się między urządzeniami.
 
-const DB_NAME = "dziennik";
-const DB_VERSION = 1;
-const STORE = "entries";
+import { openDb, STORE_ENTRIES as STORE, newId } from "./idb";
 
 export interface ClientMedia {
   id: string;
@@ -25,32 +23,6 @@ export interface ClientEntry {
   media: ClientMedia[];
 }
 
-function openDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    if (typeof indexedDB === "undefined") {
-      reject(new Error("IndexedDB niedostępne w tym środowisku."));
-      return;
-    }
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = () => {
-      const db = req.result;
-      if (!db.objectStoreNames.contains(STORE)) {
-        const store = db.createObjectStore(STORE, { keyPath: "id" });
-        store.createIndex("createdAt", "createdAt");
-      }
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-function reqToPromise<T>(r: IDBRequest<T>): Promise<T> {
-  return new Promise((resolve, reject) => {
-    r.onsuccess = () => resolve(r.result);
-    r.onerror = () => reject(r.error);
-  });
-}
-
 export type EntriesChangedKind = "create" | "update" | "delete";
 export interface EntriesChangedDetail {
   id: string;
@@ -60,15 +32,6 @@ export interface EntriesChangedDetail {
 function emitChanged(detail: EntriesChangedDetail): void {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent("entries-changed", { detail }));
-}
-
-function newId(): string {
-  // crypto.randomUUID dostępne w nowoczesnych przeglądarkach + Node
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return crypto.randomUUID();
-  }
-  // fallback
-  return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
 export { newId };
@@ -227,4 +190,3 @@ export async function listAllTagsWithCount(): Promise<
     .sort((a, b) => b.count - a.count);
 }
 
-void reqToPromise; // unused helper, exported only via internal use above

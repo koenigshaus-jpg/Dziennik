@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { Image as ImageIcon, Mic } from "lucide-react";
 import type { ClientEntry } from "@/lib/db-supabase";
-import { formatTimePL } from "@/lib/dates";
+import { formatTimePL, toIsoLocalDate } from "@/lib/dates";
 import { snippet } from "@/lib/text";
 import { parseMoods } from "@/lib/moods";
 import { cn } from "@/lib/utils";
+import { useConversationsMeta } from "@/lib/agent/use-conversations-meta";
+import { PersonaBadgeRow } from "@/components/agent/PersonaBadge";
 
 interface Props {
   entry: ClientEntry;
@@ -19,6 +21,8 @@ export function MobileEntryCard({ entry, first = false }: Props) {
   const moods = parseMoods(entry.mood);
   const images = entry.media.filter((m) => m.kind === "image");
   const audios = entry.media.filter((m) => m.kind === "audio");
+  const { personasByDay } = useConversationsMeta();
+  const personas = personasByDay.get(toIsoLocalDate(date)) ?? [];
 
   return (
     <Link
@@ -44,7 +48,8 @@ export function MobileEntryCard({ entry, first = false }: Props) {
       {(moods.length > 0 ||
         images.length > 0 ||
         audios.length > 0 ||
-        entry.tags.length > 0) && (
+        entry.tags.length > 0 ||
+        personas.length > 0) && (
         <div className="flex items-center gap-3 mt-2 text-muted text-xs flex-wrap">
           {moods.length > 0 && (
             <span className="inline-flex items-center gap-1 text-base leading-none">
@@ -70,6 +75,7 @@ export function MobileEntryCard({ entry, first = false }: Props) {
           {entry.tags.map((t) => (
             <span key={t}>#{t}</span>
           ))}
+          {personas.length > 0 && <PersonaBadgeRow personaKeys={personas} />}
         </div>
       )}
     </Link>

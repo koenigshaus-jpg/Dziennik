@@ -10,6 +10,7 @@ import {
   toIsoLocalDate,
 } from "@/lib/dates";
 import { cn } from "@/lib/utils";
+import { useConversationsMeta } from "@/lib/agent/use-conversations-meta";
 
 interface Props {
   open: boolean;
@@ -74,6 +75,7 @@ export function DesktopCalendarPopover({
   if (!open) return null;
 
   const today = new Date();
+  const { daysWithConversations } = useConversationsMeta();
   const start = gridStart(viewMonth);
   const cells: Date[] = [];
   for (let i = 0; i < 42; i++) cells.push(addDays(start, i));
@@ -134,6 +136,7 @@ export function DesktopCalendarPopover({
             const isToday = isSameLocalDay(d, today);
             const isSelected = selected ? isSameLocalDay(d, selected) : false;
             const count = entryCountsByDay.get(iso) ?? 0;
+            const hasConv = daysWithConversations.has(iso);
             return (
               <button
                 key={iso}
@@ -161,6 +164,16 @@ export function DesktopCalendarPopover({
                   >
                     {count}
                   </span>
+                )}
+                {hasConv && (
+                  <span
+                    className={cn(
+                      "absolute bottom-0.5 right-0.5 inline-block h-1 w-1 rounded-full",
+                      isSelected ? "bg-background/80" : "bg-accent"
+                    )}
+                    title="Rozmowa z agentem"
+                    aria-hidden
+                  />
                 )}
               </button>
             );

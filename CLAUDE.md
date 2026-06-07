@@ -26,6 +26,21 @@ Persistence has been migrated from server to client. **Both layers exist in the 
 - **Client (active)**: `src/lib/db-client.ts` — IndexedDB store named `dziennik`. All CRUD goes through `createEntry`/`updateEntry`/`deleteEntry`/`getEntry`/`listEntries`. Mutations dispatch a `window` `CustomEvent("entries-changed", { detail: { id, kind } })` which other panes listen to for live sync (also refetch on `window` `focus`).
 - **Server (legacy)**: `src/lib/entries.ts` + `src/db/` (Drizzle + libsql) + `src/app/api/entries/**`. Still wired but not exercised by the UI. The DB backend resolves by env in `src/db/index.ts`: Turso → `/tmp` on Vercel (ephemeral) → local `./data/`. Server-side media storage in `src/lib/storage.ts` has three modes: Vercel Blob → data URI → local FS.
 
+Wspólny opener IDB siedzi w [src/lib/idb.ts](src/lib/idb.ts) (`DB_NAME = "dziennik"`, `DB_VERSION = 2`). Definiuje oba store'y w jednym idempotentnym handlerze `onupgradeneeded` — dodając nowy store, podbij `DB_VERSION` i dorzuć tam guarded `createObjectStore`. Drugi store, `conversations`, jest zarządzany przez `src/lib/conversations-client.ts` (sekcja Agent AI poniżej).
+
+### Agent AI
+
+Wbudowany asystent rozmowny. Stack: `ai` (Vercel AI SDK) + `@ai-sdk/openai` + `@ai-sdk/react`.
+
+**Kluczowa zasada**: cała komunikacja z LLM przechodzi przez interface `ChatProvider` w [src/lib/agent/provider.ts](src/lib/agent/provider.ts) — komponenty UI i route handlery NIGDY nie importują SDK dostawcy bezpośrednio. Zmiana providera (Anthropic / Gemini / surowy openai) = nowy plik w `src/lib/agent/providers/` + jedna linia w `getChatProvider()` w [src/lib/agent/index.ts](src/lib/agent/index.ts).
+
+- **Persony** w [src/lib/agent/personas/](src/lib/agent/personas/): 7 person × 3–5 wariantów. Każda persona ma `defaultModel: gpt-4o-mini` i `deepModel: gpt-4o`. Toggle „deep mode" per persona w `/ustawienia`, stan w localStorage `agent.deepMode.<personaKey>`.
+- **Persystencja rozmów**: object store `conversations` w `dziennik` IDB. Operacje przez [src/lib/conversations-client.ts](src/lib/conversations-client.ts), event `conversations-changed` (zgodnie z konwencją `entries-changed`). Hook [useConversationsMeta](src/lib/agent/use-conversations-meta.ts) agreguje meta po dniach (dla kalendarza, badge'y, listy historii).
+- **Kontekst dnia**: niewidoczny w UI rozmowy. Klient buduje payload przez [src/lib/agent/entries-context.ts](src/lib/agent/entries-context.ts) — `dayEntries` (pełna treść wpisów z `day`) + `entriesIndex` (lekki indeks reszty: id + snippet + tagi). Indeks idzie do system promptu; model woła tool `fetchEntry(id)` (client-side execution via `onToolCall`) gdy chce pełną treść konkretnego wpisu.
+- **UI**: [AgentSheet](src/components/agent/AgentSheet.tsx) — bottom-sheet mobile fullscreen / desktop centered. Globalny stan otwierania przez `useAgentSheet()` z [AgentSheetProvider](src/components/agent/AgentSheetProvider.tsx) zamontowanego w `layout.tsx`. `ComposerBar.handleSend` → `openSheet({day, initialMessage})`.
+- **Auto-tytuł rozmowy**: osobny endpoint `/api/chat/title` (lekki `gpt-4o-mini`) wywoływany po 2. odpowiedzi assistant.
+- **Markdown** w wiadomościach: własny minimalistyczny renderer [AgentMarkdown](src/components/agent/AgentMarkdown.tsx) (bez `react-markdown` — nie dodajemy 30 KB dla jednego use-case'a). Obsługuje listy, **bold**, *italic*, `code`, nagłówki, code blocks.
+
 ### Responsive layout system
 
 Breakpoint that switches "mobile" vs "desktop" mode is Tailwind's `lg` (≥1024px). Components do not branch in JS — they render both variants and toggle via `lg:hidden` / `hidden lg:flex`.
