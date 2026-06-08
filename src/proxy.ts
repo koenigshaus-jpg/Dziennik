@@ -18,10 +18,11 @@ const PUBLIC_PATHS = [
   // OAuth 2.1 + MCP (Faza 2):
   "/.well-known/oauth-protected-resource",
   "/.well-known/oauth-authorization-server",
-  "/oauth/register",                          // DCR (RFC7591)
-  "/oauth/token",                              // token endpoint
-  "/oauth/authorize/decision",                 // POST decision (own auth check)
-  "/api/mcp",                                  // MCP HTTP transport (own withMcpAuth)
+  "/.well-known/openid-configuration",          // klienci OIDC-aware (ChatGPT, niektóre Claude) tu pukają
+  "/oauth/register",                            // DCR (RFC7591)
+  "/oauth/token",                                // token endpoint
+  "/oauth/authorize/decision",                   // POST decision (own auth check)
+  "/api/mcp",                                    // MCP HTTP transport (own withMcpAuth)
   // /oauth/authorize zostaje POD loginem — wymaga sesji Supabase do consent
 ];
 
