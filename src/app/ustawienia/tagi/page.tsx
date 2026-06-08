@@ -1,11 +1,10 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { toast } from "sonner";
-import { ArrowLeft, Check, Loader2, Pencil, Trash2, X } from "lucide-react";
+import { Check, Loader2, Pencil, Trash2, X } from "lucide-react";
 
-import { AppShell } from "@/components/AppShell";
+import { SettingsShell } from "@/components/settings/SettingsShell";
 import {
   deleteTag,
   listAllTagsWithCount,
@@ -117,19 +116,8 @@ export default function TagiPage() {
   }
 
   return (
-    <AppShell>
-      <header className="flex items-center gap-3 mb-6">
-        <Link
-          href="/ustawienia"
-          className="inline-flex h-10 w-10 items-center justify-center rounded-full hover:bg-foreground/5"
-          aria-label="Wróć"
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </Link>
-        <h1 className="text-2xl font-display font-bold">Tagi</h1>
-      </header>
-
-      <div className="pb-16">
+    <SettingsShell title="Tagi">
+      <div>
         <p className="text-sm text-muted mb-4">
           Zmiana nazwy aktualizuje tag we wszystkich wpisach. Usunięcie
           odpina tag od wpisów, ale samych wpisów nie kasuje.
@@ -275,6 +263,6 @@ export default function TagiPage() {
           </div>
         </DialogContent>
       </Dialog>
-    </AppShell>
+    </SettingsShell>
   );
 }

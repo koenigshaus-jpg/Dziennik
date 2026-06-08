@@ -57,13 +57,10 @@ export function AgentSettingsSection() {
 
   return (
     <section>
-      <div className="mb-4">
-        <h2 className="text-lg font-semibold">Asystent AI</h2>
-        <p className="text-sm text-muted mt-0.5">
-          Wybierz, kto otwiera się domyślnie. Tryb głęboki włącz, gdy chcesz
-          mądrzejsze (ale wolniejsze i droższe) odpowiedzi.
-        </p>
-      </div>
+      <p className="text-sm text-muted mb-4">
+        Wybierz, kto otwiera się domyślnie. Tryb głęboki włącz, gdy chcesz
+        mądrzejsze (ale wolniejsze i droższe) odpowiedzi.
+      </p>
 
       <div className="flex flex-col gap-3">
         {PERSONA_ORDER.map((key) => {

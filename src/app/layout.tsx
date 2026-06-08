@@ -4,7 +4,6 @@ import { Toaster } from "sonner";
 import "./globals.css";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
 import { ThemeProvider } from "@/components/ThemeProvider";
-import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 import { AgentSheetProvider } from "@/components/agent/AgentSheetProvider";
 
 const inter = Inter({
@@ -37,6 +36,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -55,7 +55,6 @@ export default function RootLayout({
         <ThemeProvider>
           <AgentSheetProvider>
             {children}
-            <ThemeSwitcher />
             <Toaster position="top-center" richColors />
           </AgentSheetProvider>
         </ThemeProvider>

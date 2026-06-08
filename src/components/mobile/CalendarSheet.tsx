@@ -157,7 +157,7 @@ export function CalendarSheet({
           className={cn(
             "fixed inset-x-0 bottom-0 z-50 h-[85vh] rounded-t-2xl",
             "bg-background border-t border-border shadow-2xl",
-            "flex flex-col pb-[env(safe-area-inset-bottom)]",
+            "flex flex-col pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]",
             "data-[state=open]:animate-in data-[state=open]:slide-in-from-bottom",
             "data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom"
           )}

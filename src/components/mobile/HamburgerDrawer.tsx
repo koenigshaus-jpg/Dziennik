@@ -161,7 +161,7 @@ export function HamburgerDrawer({ open, onOpenChange }: Props) {
                     className="flex items-center gap-3 px-3 h-11 rounded-md text-sm hover:bg-foreground/5"
                   >
                     <Settings className="h-4 w-4" />
-                    Ustawienia
+                    Asystent
                   </Link>
                 </li>
                 <li>

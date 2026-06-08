@@ -22,7 +22,7 @@ export const THEMES: { id: ThemeId; label: string; swatch: string; dark?: boolea
   { id: "rose", label: "Różany", swatch: "#e11d48" },
 ];
 
-export const DEFAULT_THEME: ThemeId = "neutral";
+export const DEFAULT_THEME: ThemeId = "dark";
 export const DEFAULT_RADIUS: RadiusMode = "normal";
 
 export const THEME_STORAGE_KEY = "dziennik-theme";

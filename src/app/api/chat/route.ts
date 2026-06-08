@@ -21,7 +21,7 @@ function isValidPayload(value: unknown): value is ChatRequestPayload {
     typeof v.deepMode === "boolean" &&
     typeof v.day === "string" &&
     Array.isArray(v.dayEntries) &&
-    Array.isArray(v.otherEntries)
+    Array.isArray(v.entriesIndex)
   );
 }
 
@@ -53,7 +53,7 @@ export async function POST(req: Request) {
     persona,
     day: body.day,
     dayEntries: body.dayEntries,
-    otherEntries: body.otherEntries,
+    entriesIndex: body.entriesIndex,
   });
 
   const model = body.deepMode ? persona.deepModel : persona.defaultModel;

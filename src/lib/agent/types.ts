@@ -44,6 +44,18 @@ export interface EntryFull {
   tags?: string[];
 }
 
+/** Lekka pozycja indeksu wpisów spoza bieżącego dnia. Pełną treść model dociąga przez fetchEntry. */
+export interface EntryIndexItem {
+  id: string;
+  /** Data wpisu YYYY-MM-DD. */
+  date: string;
+  title: string | null;
+  /** Krótki fragment treści (do ~200 znaków). */
+  snippet: string;
+  mood?: string;
+  tags?: string[];
+}
+
 export interface ChatRequestPayload {
   messages: ChatMessage[];
   personaKey: PersonaKey;
@@ -53,8 +65,8 @@ export interface ChatRequestPayload {
   day: string;
   /** Pełne wpisy z `day` — zawsze w system prompcie. */
   dayEntries: EntryFull[];
-  /** Pełne wpisy ze wszystkich pozostałych dni (z wypełnionym polem date). */
-  otherEntries: EntryFull[];
+  /** Lekki indeks wpisów ze wszystkich pozostałych dni — model pobiera pełną treść przez fetchEntry. */
+  entriesIndex: EntryIndexItem[];
 }
 
 /** Payload dla endpointu generującego tytuł rozmowy. */

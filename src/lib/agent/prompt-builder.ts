@@ -1,4 +1,4 @@
-import type { PersonaConfig, EntryFull } from "./types";
+import type { PersonaConfig, EntryFull, EntryIndexItem } from "./types";
 
 interface BuildSystemPromptOptions {
   persona: PersonaConfig;
@@ -6,15 +6,17 @@ interface BuildSystemPromptOptions {
   day: string;
   /** Pełna treść wpisów z tego dnia. */
   dayEntries: EntryFull[];
-  /** Pełne wpisy ze wszystkich pozostałych dni (z polem date). */
-  otherEntries: EntryFull[];
+  /** Indeks wpisów z pozostałych dni (id + snippet + tagi + data). */
+  entriesIndex: EntryIndexItem[];
 }
 
 /**
- * Składa system prompt: prompt persony + kontekst dnia + wpisy.
+ * Składa system prompt: prompt persony + kontekst dnia + wpisy bieżącego dnia
+ * (pełna treść) + indeks pozostałych wpisów. Pełną treść konkretnego wpisu
+ * model dociąga przez tool `fetchEntry({ id })`.
  */
 export function buildSystemPrompt(opts: BuildSystemPromptOptions): string {
-  const { persona, day, dayEntries, otherEntries } = opts;
+  const { persona, day, dayEntries, entriesIndex } = opts;
 
   const parts: string[] = [];
 
@@ -26,28 +28,47 @@ export function buildSystemPrompt(opts: BuildSystemPromptOptions): string {
   if (dayEntries.length === 0) {
     parts.push("\nUżytkownik nie ma żadnych wpisów z tego dnia.\n");
   } else {
-    parts.push(`\nWpisy z tego dnia (${dayEntries.length}):\n`);
-    renderEntries(dayEntries, parts);
+    parts.push(`\nWpisy z tego dnia (${dayEntries.length}) — pełna treść:\n`);
+    renderFullEntries(dayEntries, parts);
   }
 
-  if (otherEntries.length > 0) {
-    parts.push(`\n— — —\n\nPOZOSTAŁE WPISY Z DZIENNIKA (${otherEntries.length})\n`);
-    parts.push("Wpisy z poprzednich dni — pełna treść dostępna poniżej:\n");
-    renderEntries(otherEntries, parts, true);
+  if (entriesIndex.length > 0) {
+    parts.push(
+      `\n— — —\n\nINDEKS POZOSTAŁYCH WPISÓW (${entriesIndex.length})\n`
+    );
+    parts.push(
+      "Poniżej lista wszystkich wpisów z poprzednich dni — tylko skrót. " +
+        "Gdy potrzebujesz pełnej treści konkretnego wpisu, wywołaj narzędzie " +
+        "`fetchEntry({ id })` z `id` z tej listy. Nie zgaduj treści — sięgaj " +
+        "po wpis przez narzędzie zawsze gdy jest istotny dla rozmowy.\n"
+    );
+    renderIndex(entriesIndex, parts);
   }
 
   return parts.join("");
 }
 
-function renderEntries(entries: EntryFull[], parts: string[], showDate = false) {
+function renderFullEntries(entries: EntryFull[], parts: string[]) {
   entries.forEach((entry, idx) => {
-    const dateLabel = showDate && entry.date ? ` — ${formatDayPl(entry.date)}` : "";
-    parts.push(`\n[Wpis ${idx + 1}${dateLabel}${entry.title ? ` — ${entry.title}` : ""}]\n`);
+    parts.push(
+      `\n[Wpis ${idx + 1}${entry.title ? ` — ${entry.title}` : ""}] (id: ${entry.id})\n`
+    );
     if (entry.mood) parts.push(`Nastrój: ${entry.mood}\n`);
     if (entry.tags?.length) parts.push(`Tagi: ${entry.tags.join(", ")}\n`);
     parts.push("\n");
     parts.push(entry.plainText.trim());
     parts.push("\n");
+  });
+}
+
+function renderIndex(entries: EntryIndexItem[], parts: string[]) {
+  parts.push("\n");
+  entries.forEach((entry) => {
+    const title = entry.title ? ` — ${entry.title}` : "";
+    parts.push(`- ${formatDayPl(entry.date)}${title} (id: ${entry.id})\n`);
+    if (entry.mood) parts.push(`  Nastrój: ${entry.mood}\n`);
+    if (entry.tags?.length) parts.push(`  Tagi: ${entry.tags.join(", ")}\n`);
+    parts.push(`  Skrót: ${entry.snippet}\n`);
   });
 }
 

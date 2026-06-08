@@ -131,9 +131,9 @@ export function AgentSheet({ day, initialMessage, initialPersonaKey, onClose }: 
         className={cn(
           "fixed z-40 bg-background border border-border shadow-2xl flex flex-col",
           // Mobile: bottom sheet ~85vh
-          "left-0 right-0 bottom-0 rounded-t-2xl max-h-[85vh] h-[85vh]",
+          "left-0 right-0 bottom-0 rounded-t-2xl max-h-[85vh] h-[85vh] pt-[env(safe-area-inset-top)]",
           // Desktop: centered, węższy, nad ComposerBar
-          "lg:left-1/2 lg:right-auto lg:bottom-20 lg:-translate-x-1/2 lg:rounded-2xl lg:w-[min(720px,90vw)] lg:h-[min(80vh,720px)] lg:max-h-[80vh]"
+          "lg:left-1/2 lg:right-auto lg:bottom-20 lg:-translate-x-1/2 lg:rounded-2xl lg:w-[min(720px,90vw)] lg:h-[min(80vh,720px)] lg:max-h-[80vh] lg:pt-0"
         )}
         role="dialog"
         aria-modal
@@ -252,7 +252,7 @@ function AgentChatInstance({
       new DefaultChatTransport({
         api: "/api/chat",
         prepareSendMessagesRequest: async ({ messages }) => {
-          const { dayEntries, otherEntries } = await buildEntriesContext(day);
+          const { dayEntries, entriesIndex } = await buildEntriesContext(day);
           const plain = messages.map((m) => ({
             role: m.role as "user" | "assistant",
             content: extractText(m),
@@ -264,7 +264,7 @@ function AgentChatInstance({
               deepMode: getDeepMode(personaKey),
               day,
               dayEntries,
-              otherEntries,
+              entriesIndex,
             },
           };
         },
