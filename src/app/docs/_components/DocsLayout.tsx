@@ -15,9 +15,11 @@ interface Props {
   children: React.ReactNode;
   /** Czy istnieje sesja użytkownika — wpływa na CTA „Wróć do aplikacji". */
   isLoggedIn: boolean;
+  /** Aktywna zakładka — `null` to landing /docs bez podświetlania. */
+  activeTab?: "api" | "mcp" | null;
 }
 
-export function DocsLayout({ sections, children, isLoggedIn }: Props) {
+export function DocsLayout({ sections, children, isLoggedIn, activeTab = null }: Props) {
   const [drawerOpen, setDrawerOpen] = React.useState(false);
 
   return (
@@ -47,12 +49,19 @@ export function DocsLayout({ sections, children, isLoggedIn }: Props) {
             <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
+        {/* Top tabs — REST API / MCP */}
+        <div className="mx-auto max-w-[1400px] px-4">
+          <nav className="flex gap-1 -mb-px">
+            <TabLink href="/docs/api" label="REST API" active={activeTab === "api"} />
+            <TabLink href="/docs/mcp" label="MCP" active={activeTab === "mcp"} />
+          </nav>
+        </div>
       </header>
 
       <div className="mx-auto flex max-w-[1400px] gap-8 px-4">
         {/* Sidebar — desktop sticky */}
         <aside className="hidden w-60 shrink-0 lg:block">
-          <nav className="sticky top-20 max-h-[calc(100vh-5rem)] overflow-y-auto py-8 pr-2">
+          <nav className="sticky top-28 max-h-[calc(100vh-7rem)] overflow-y-auto py-8 pr-2">
             <NavList sections={sections} />
           </nav>
         </aside>
@@ -64,7 +73,7 @@ export function DocsLayout({ sections, children, isLoggedIn }: Props) {
             onClick={() => setDrawerOpen(false)}
           >
             <aside
-              className="absolute left-0 top-14 bottom-0 w-72 overflow-y-auto bg-background p-4 shadow-xl"
+              className="absolute left-0 top-[5.75rem] bottom-0 w-72 overflow-y-auto bg-background p-4 shadow-xl"
               onClick={(e) => e.stopPropagation()}
             >
               <NavList sections={sections} onNavigate={() => setDrawerOpen(false)} />
@@ -78,6 +87,22 @@ export function DocsLayout({ sections, children, isLoggedIn }: Props) {
         </main>
       </div>
     </div>
+  );
+}
+
+function TabLink({ href, label, active }: { href: string; label: string; active: boolean }) {
+  return (
+    <Link
+      href={href}
+      className={
+        "inline-flex h-9 items-center px-3 text-sm font-medium border-b-2 transition-colors " +
+        (active
+          ? "border-foreground text-foreground"
+          : "border-transparent text-muted hover:text-foreground hover:border-border")
+      }
+    >
+      {label}
+    </Link>
   );
 }
 

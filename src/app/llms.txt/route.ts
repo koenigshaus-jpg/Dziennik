@@ -27,6 +27,9 @@ Wszystkie odpowiedzi w JSON. Pola w snake_case. Daty w ISO 8601. Strefa dni: Eur
 - Base URL: \`${baseUrl}/api/v1\`
 - OpenAPI 3.1: ${baseUrl}/openapi.json
 - HTML docs: ${baseUrl}/docs
+- **MCP server**: \`${baseUrl}/api/mcp\` (16 tools, OAuth 2.1 + Bearer)
+- MCP docs: ${baseUrl}/docs/mcp
+- OAuth discovery: ${baseUrl}/.well-known/oauth-authorization-server
 
 ## Authentication
 
@@ -108,6 +111,37 @@ curl -X POST "$BASE/chat" \\
   -H "Content-Type: application/json" \\
   -d '{"text":"Co dziś warto przemyśleć?"}'
 \`\`\`
+
+## MCP server (Model Context Protocol)
+
+Alternatywa do REST API — natywne podłączenie do Claude.ai, Cursora, Claude Desktopa, ChatGPT Developer Mode.
+Wszystkie operacje powyżej są dostępne jako MCP tools z tymi samymi parametrami.
+
+- **Endpoint**: \`${baseUrl}/api/mcp\` (Streamable HTTP transport)
+- **Auth**: OAuth 2.1 + Dynamic Client Registration (Claude.ai), albo Bearer \`sk_live_…\` (Cursor/Claude Desktop)
+- **16 tools** (snake_case): \`create_entry\`, \`list_entries\`, \`get_entry\`, \`update_entry\`, \`delete_entry\`, \`add_tag_to_entry\`, \`remove_tag_from_entry\`, \`set_entry_mood\`, \`list_my_tags\`, \`list_assistants\`, \`get_current_assistant\`, \`set_current_assistant\`, \`chat_with_assistant\`, \`list_conversations\`, \`get_conversation\`, \`delete_conversation\`
+
+### Podłączenie do Claude.ai (web)
+
+1. Settings → Connectors → Add custom connector
+2. URL: \`${baseUrl}/api/mcp\`
+3. Connect → OAuth flow → Autoryzuj → gotowe
+
+### Podłączenie do Cursor
+
+\`\`\`json
+// .cursor/mcp.json
+{
+  "mcpServers": {
+    "dziennik": {
+      "url": "${baseUrl}/api/mcp",
+      "headers": { "Authorization": "Bearer sk_live_..." }
+    }
+  }
+}
+\`\`\`
+
+Pełna dokumentacja: ${baseUrl}/docs/mcp
 
 ## Rate limits
 

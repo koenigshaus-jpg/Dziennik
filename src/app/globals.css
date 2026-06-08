@@ -355,7 +355,7 @@ body {
   margin: 3rem 0 1rem;
   padding-top: 1rem;
   border-top: 1px solid var(--border);
-  scroll-margin-top: 5rem;
+  scroll-margin-top: 7rem;
 }
 .docs-prose h2:first-of-type {
   border-top: 0;
@@ -366,7 +366,7 @@ body {
   font-size: 1.15rem;
   font-weight: 600;
   margin: 1.75rem 0 0.5rem;
-  scroll-margin-top: 5rem;
+  scroll-margin-top: 7rem;
 }
 .docs-prose p {
   margin: 0.75rem 0;
