@@ -31,7 +31,7 @@ import {
 import { getPersona } from "@/lib/agent/personas";
 import type { PersonaKey } from "@/lib/agent/types";
 import { buildEntriesContext } from "@/lib/agent/entries-context";
-import { getEntry } from "@/lib/db-client";
+import { getEntry } from "@/lib/db-supabase";
 import {
   appendMessage,
   createConversation,

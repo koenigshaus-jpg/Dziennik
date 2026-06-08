@@ -4,7 +4,22 @@
 // `entries-changed` w db-client.
 
 import { newId, openDb, STORE_CONVERSATIONS as STORE } from "./idb";
+import { getSupabaseClient } from "./supabase/client";
 import type { PersonaKey } from "./agent/types";
+
+/** Pobiera id zalogowanego usera (lub null gdy gość). Używane do
+ *  scope'owania rozmów per konto na tym samym urządzeniu — bez tego
+ *  rozmowy poprzedniego konta wyciekają do następnego. */
+async function getCurrentUserId(): Promise<string | null> {
+  if (typeof window === "undefined") return null;
+  try {
+    const supabase = getSupabaseClient();
+    const { data } = await supabase.auth.getUser();
+    return data.user?.id ?? null;
+  } catch {
+    return null;
+  }
+}
 
 export type ConversationMessageStatus =
   | "ok"
@@ -34,6 +49,9 @@ export interface Conversation {
   createdAt: number;
   updatedAt: number;
   messages: ConversationMessage[];
+  /** Supabase user id właściciela rozmowy. Może być null dla starych rekordów
+   *  sprzed wprowadzenia scope'owania — takie rekordy nie są pokazywane. */
+  userId?: string | null;
 }
 
 export type ConversationsChangedKind =
@@ -88,6 +106,7 @@ export async function createConversation(input: {
   personaKey: PersonaKey;
 }): Promise<Conversation> {
   const now = Date.now();
+  const userId = await getCurrentUserId();
   const conv: Conversation = {
     id: newId(),
     day: input.day,
@@ -96,6 +115,7 @@ export async function createConversation(input: {
     createdAt: now,
     updatedAt: now,
     messages: [],
+    userId,
   };
   await withStore("readwrite", (s) => {
     s.put(conv);
@@ -112,10 +132,15 @@ export async function createConversation(input: {
 export async function getConversation(
   id: string
 ): Promise<Conversation | null> {
-  return withStore("readonly", async (s) => {
+  const userId = await getCurrentUserId();
+  const conv = await withStore("readonly", async (s) => {
     const r = await reqToPromise(s.get(id));
     return (r as Conversation | undefined) ?? null;
   });
+  if (!conv) return null;
+  // Scope per user — orphany (bez userId) i rozmowy innego konta nie są widoczne.
+  if (!conv.userId || conv.userId !== userId) return null;
+  return conv;
 }
 
 export async function appendMessage(
@@ -187,11 +212,21 @@ export async function deleteConversation(id: string): Promise<void> {
   });
 }
 
-async function getAll(): Promise<Conversation[]> {
+async function getAllRaw(): Promise<Conversation[]> {
   return withStore("readonly", async (s) => {
     const r = await reqToPromise(s.getAll());
     return (r as Conversation[]) ?? [];
   });
+}
+
+/** Zwraca rozmowy zalogowanego użytkownika. Rekordy bez `userId` (orphan
+ *  sprzed scope'owania) są pomijane, żeby nie wyciekły między kontami na
+ *  tym samym urządzeniu. */
+async function getAll(): Promise<Conversation[]> {
+  const userId = await getCurrentUserId();
+  const all = await getAllRaw();
+  if (!userId) return [];
+  return all.filter((c) => c.userId === userId);
 }
 
 export async function listConversations(): Promise<Conversation[]> {

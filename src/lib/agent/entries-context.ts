@@ -4,7 +4,7 @@
 
 "use client";
 
-import { listEntries, type ClientEntry } from "@/lib/db-client";
+import { listEntries, type ClientEntry } from "@/lib/db-supabase";
 import type { EntryFull, EntryIndexItem } from "./types";
 
 const SNIPPET_MAX = 200;
