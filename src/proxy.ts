@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClientForMiddleware } from "@/lib/supabase/server";
 
-const PUBLIC_PATHS = ["/login", "/api/auth/callback"];
+// Ścieżki publiczne — bez wymogu sesji.
+// /docs        — publiczna dokumentacja API (Vercel-style, indexable)
+// /api/v1/*    — publiczne API z własną autoryzacją (API keys / Supabase JWT)
+const PUBLIC_PATHS = ["/login", "/api/auth/callback", "/docs", "/api/v1"];
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;

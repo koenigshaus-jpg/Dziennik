@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowLeft, Sparkles, Tag as TagIcon, Palette, User } from "lucide-react";
+import { ArrowLeft, Sparkles, Tag as TagIcon, Palette, User, KeyRound, BookOpen } from "lucide-react";
 
 import { AppShell } from "@/components/AppShell";
 import { cn } from "@/lib/utils";
@@ -12,6 +12,8 @@ type SectionDef = {
   href: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
+  /** Link poza shellem ustawień (np. /docs). Nie podświetla się jako "aktywny". */
+  external?: boolean;
 };
 
 const SECTIONS: readonly SectionDef[] = [
@@ -19,6 +21,8 @@ const SECTIONS: readonly SectionDef[] = [
   { href: "/ustawienia/tagi", label: "Tagi", icon: TagIcon },
   { href: "/ustawienia/wyglad", label: "Wygląd", icon: Palette },
   { href: "/ustawienia/konto", label: "Konto", icon: User },
+  { href: "/ustawienia/api", label: "API", icon: KeyRound },
+  { href: "/docs", label: "Dokumentacja API", icon: BookOpen, external: true },
 ];
 
 interface Props {
@@ -61,8 +65,8 @@ export function SettingsShell({ title, children }: Props) {
             <h1 className="text-2xl font-display font-bold">Ustawienia</h1>
           </div>
           <nav className="flex flex-col gap-1">
-            {SECTIONS.map(({ href, label, icon: Icon }) => {
-              const isActive = pathname === href;
+            {SECTIONS.map(({ href, label, icon: Icon, external }) => {
+              const isActive = !external && pathname === href;
               return (
                 <Link
                   key={href}

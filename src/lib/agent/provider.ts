@@ -28,6 +28,11 @@ export interface ChatStreamOptions {
  */
 export interface ChatProvider {
   streamChat(opts: ChatStreamOptions): Promise<Response> | Response;
+  /**
+   * Non-streaming wariant — czeka aż model skończy i zwraca pełną odpowiedź.
+   * Używany przez publiczne /api/v1/chat (JSON one-shot dla agentów).
+   */
+  generateChat(opts: ChatStreamOptions): Promise<{ content: string; model: string }>;
   /** Krótki, jednostrzałowy call do generowania tytułu rozmowy. */
   generateTitle(opts: {
     model: string;

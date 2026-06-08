@@ -37,6 +37,22 @@ export const vercelOpenAiProvider: ChatProvider = {
     return result.toUIMessageStreamResponse();
   },
 
+  async generateChat(opts: ChatStreamOptions): Promise<{ content: string; model: string }> {
+    const modelMessages = await convertToModelMessages(
+      opts.messages as UIMessage[]
+    );
+    const result = await generateText({
+      model: openai(opts.model),
+      system: opts.systemPrompt,
+      messages: modelMessages,
+      temperature: opts.temperature,
+      tools: opts.tools as Parameters<typeof generateText>[0]["tools"],
+      stopWhen: stepCountIs(8),
+      abortSignal: opts.abortSignal,
+    });
+    return { content: result.text, model: opts.model };
+  },
+
   async generateTitle(opts): Promise<string> {
     const result = await generateText({
       model: openai(opts.model),
