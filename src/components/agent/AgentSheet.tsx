@@ -174,12 +174,23 @@ export function AgentSheet({ day, initialMessage, initialPersonaKey, onClose }: 
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full hover:bg-foreground/5 text-muted"
+            className="hidden lg:inline-flex h-8 w-8 items-center justify-center rounded-full hover:bg-foreground/5 text-muted"
             aria-label="Zamknij"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
+
+        {/* Mobile: zawsze widoczny X w prawym górnym rogu sheetu. */}
+        <button
+          type="button"
+          onClick={onClose}
+          className="lg:hidden absolute right-2 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full bg-background/80 backdrop-blur-sm border border-border text-foreground shadow-sm hover:bg-foreground/5"
+          style={{ top: "calc(env(safe-area-inset-top) + 0.5rem)" }}
+          aria-label="Zamknij"
+        >
+          <X className="h-5 w-5" />
+        </button>
 
         {/* Chat instance — przeładowuje się przy zmianie persony / rozmowy. */}
         {conversationLoaded ? (
@@ -497,7 +508,7 @@ function MessageBubble({ message }: { message: UIMessage }) {
     >
       <div
         className={cn(
-          "max-w-[88%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed break-words",
+          "max-w-[88%] rounded-xl px-3.5 py-2.5 text-sm leading-relaxed break-words",
           isUser
             ? "bg-foreground text-background whitespace-pre-wrap"
             : "bg-foreground/5 text-foreground"
