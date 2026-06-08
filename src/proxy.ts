@@ -4,7 +4,16 @@ import { createSupabaseServerClientForMiddleware } from "@/lib/supabase/server";
 // Ścieżki publiczne — bez wymogu sesji.
 // /docs        — publiczna dokumentacja API (Vercel-style, indexable)
 // /api/v1/*    — publiczne API z własną autoryzacją (API keys / Supabase JWT)
-const PUBLIC_PATHS = ["/login", "/api/auth/callback", "/docs", "/api/v1"];
+// /robots.txt  — bot crawlers nie mogą trafiać na 307→/login (ChatGPT odrzuca strony za auth wall)
+// /sitemap.xml — to samo
+const PUBLIC_PATHS = [
+  "/login",
+  "/api/auth/callback",
+  "/docs",
+  "/api/v1",
+  "/robots.txt",
+  "/sitemap.xml",
+];
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
