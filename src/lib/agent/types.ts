@@ -28,10 +28,11 @@ export interface PersonaConfig {
   deepModel: string;
 }
 
-export interface ChatMessage {
-  role: "user" | "assistant";
-  content: string;
-}
+/** UI message przekazywane z klienta (z @ai-sdk/react). Serwer konwertuje
+ *  je na model messages przez `convertToModelMessages`, dzięki czemu tool
+ *  calls + outputs nie giną w transporcie. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type UIMessageInput = any;
 
 /** Pełny wpis (treść) wysyłany w kontekście agenta. */
 export interface EntryFull {
@@ -57,7 +58,7 @@ export interface EntryIndexItem {
 }
 
 export interface ChatRequestPayload {
-  messages: ChatMessage[];
+  messages: UIMessageInput[];
   personaKey: PersonaKey;
   /** Czy włączony tryb głęboki (gpt-4o zamiast mini). Wartość z localStorage. */
   deepMode: boolean;

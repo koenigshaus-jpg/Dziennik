@@ -4,6 +4,7 @@ import * as React from "react";
 import { useChat } from "@ai-sdk/react";
 import {
   DefaultChatTransport,
+  lastAssistantMessageIsCompleteWithToolCalls,
   type UIMessage,
   type ToolUIPart,
 } from "ai";
@@ -60,6 +61,11 @@ export function AgentSheet({ day, initialMessage, initialPersonaKey, onClose }: 
     ConversationMessage[]
   >([]);
   const [conversationLoaded, setConversationLoaded] = React.useState(false);
+  // Counter bumpany przy „Nowej rozmowie" / usunięciu / zmianie persony —
+  // używany w key AgentChatInstance, żeby przeładować useChat. NIE bumpujemy
+  // przy zwykłym utworzeniu konwersacji (gdy conversationId zmienia się
+  // z null na id), bo to powoduje remount w trakcie streamu.
+  const [instanceKey, setInstanceKey] = React.useState(0);
 
   // Esc zamyka sheet.
   React.useEffect(() => {
@@ -100,8 +106,7 @@ export function AgentSheet({ day, initialMessage, initialPersonaKey, onClose }: 
   const handleNewConversation = React.useCallback(() => {
     setConversationId(null);
     setInitialMessages([]);
-    setConversationLoaded(false);
-    setTimeout(() => setConversationLoaded(true), 0);
+    setInstanceKey((k) => k + 1);
   }, []);
 
   const handleDeleteConversation = React.useCallback(async () => {
@@ -115,8 +120,7 @@ export function AgentSheet({ day, initialMessage, initialPersonaKey, onClose }: 
     await deleteConversationDb(conversationId);
     setConversationId(null);
     setInitialMessages([]);
-    setConversationLoaded(false);
-    setTimeout(() => setConversationLoaded(true), 0);
+    setInstanceKey((k) => k + 1);
     toast.message("Rozmowa usunięta.");
   }, [conversationId]);
 
@@ -195,7 +199,7 @@ export function AgentSheet({ day, initialMessage, initialPersonaKey, onClose }: 
         {/* Chat instance — przeładowuje się przy zmianie persony / rozmowy. */}
         {conversationLoaded ? (
           <AgentChatInstance
-            key={`${conversationId ?? "new"}-${personaKey}`}
+            key={`${personaKey}-${instanceKey}`}
             day={day}
             personaKey={personaKey}
             existingConversationId={conversationId}
@@ -264,13 +268,12 @@ function AgentChatInstance({
         api: "/api/chat",
         prepareSendMessagesRequest: async ({ messages }) => {
           const { dayEntries, entriesIndex } = await buildEntriesContext(day);
-          const plain = messages.map((m) => ({
-            role: m.role as "user" | "assistant",
-            content: extractText(m),
-          }));
+          // Wysyłamy całe UI messages (zawierają tool calls + outputs).
+          // Serwer konwertuje przez convertToModelMessages — inaczej po
+          // fetchEntry model nie widzi wyniku i pętli się wołając tool ponownie.
           return {
             body: {
-              messages: plain,
+              messages,
               personaKey,
               deepMode: getDeepMode(personaKey),
               day,
@@ -287,25 +290,29 @@ function AgentChatInstance({
     useChat({
       messages: existingMessages.map(uiMessageFromStored),
       transport,
+      // AI SDK v6: po wykonaniu client-side toola (fetchEntry) wysyła
+      // wynik z powrotem do serwera, żeby model dokończył odpowiedź.
+      sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
       onToolCall: async ({ toolCall }) => {
-        if (toolCall.toolName === "fetchEntry") {
-          const id = (toolCall.input as { id: string }).id;
-          const entry = await getEntry(id);
-          const result = entry
-            ? {
-                id: entry.id,
-                createdAt: new Date(entry.createdAt).toISOString(),
-                plainText: entry.contentText,
-                mood: entry.mood ?? null,
-                tags: entry.tags,
-              }
-            : { error: "Wpis nie znaleziony." };
-          await addToolResult({
-            tool: "fetchEntry",
-            toolCallId: toolCall.toolCallId,
-            output: result,
-          });
-        }
+        if (toolCall.toolName !== "fetchEntry") return;
+        const id = (toolCall.input as { id: string }).id;
+        const entry = await getEntry(id);
+        const result = entry
+          ? {
+              id: entry.id,
+              createdAt: new Date(entry.createdAt).toISOString(),
+              plainText: entry.contentText,
+              mood: entry.mood ?? null,
+              tags: entry.tags,
+            }
+          : { error: "Wpis nie znaleziony." };
+        // Bez await — addToolResult kolejkuje się przez SerialJobExecutor,
+        // a my jesteśmy już w job-ie (runUpdateMessageJob). await tu = deadlock.
+        void addToolResult({
+          tool: "fetchEntry",
+          toolCallId: toolCall.toolCallId,
+          output: result,
+        });
       },
       onFinish: async ({ message }) => {
         try {

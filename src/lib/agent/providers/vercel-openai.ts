@@ -3,19 +3,25 @@
 // nowy plik w tym katalogu + zmiana jednej linii w ../index.ts.
 
 import { openai } from "@ai-sdk/openai";
-import { generateText, stepCountIs, streamText } from "ai";
+import {
+  convertToModelMessages,
+  generateText,
+  stepCountIs,
+  streamText,
+  type UIMessage,
+} from "ai";
 
 import type { ChatProvider, ChatStreamOptions } from "../provider";
 
 export const vercelOpenAiProvider: ChatProvider = {
-  streamChat(opts: ChatStreamOptions): Response {
+  async streamChat(opts: ChatStreamOptions): Promise<Response> {
+    const modelMessages = await convertToModelMessages(
+      opts.messages as UIMessage[]
+    );
     const result = streamText({
       model: openai(opts.model),
       system: opts.systemPrompt,
-      messages: opts.messages.map((m) => ({
-        role: m.role,
-        content: m.content,
-      })),
+      messages: modelMessages,
       temperature: opts.temperature,
       // Narzędzia są zdefiniowane w src/lib/agent/tools/ używając tool() z 'ai'.
       // Przekazujemy je tu jako passthrough — typowanie luźne, bo provider

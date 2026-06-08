@@ -65,7 +65,7 @@ export async function POST(req: Request) {
   const model = body.deepMode ? persona.deepModel : persona.defaultModel;
 
   try {
-    return getChatProvider().streamChat({
+    return await getChatProvider().streamChat({
       systemPrompt,
       messages: body.messages,
       model,

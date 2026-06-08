@@ -2,11 +2,12 @@
 // żadnego SDK od dostawcy bezpośrednio — wszystko idzie przez ChatProvider.
 // Zmiana providera = nowa implementacja interface'u + jedna linia w factory.
 
-import type { ChatMessage } from "./types";
+import type { UIMessageInput } from "./types";
 
 export interface ChatStreamOptions {
   systemPrompt: string;
-  messages: ChatMessage[];
+  /** UI messages z @ai-sdk/react — provider konwertuje je do model messages. */
+  messages: UIMessageInput[];
   model: string;
   temperature: number;
   /**
@@ -26,7 +27,7 @@ export interface ChatStreamOptions {
  * konsumuje to bez świadomości tego, jaki SDK siedzi pod spodem.
  */
 export interface ChatProvider {
-  streamChat(opts: ChatStreamOptions): Response;
+  streamChat(opts: ChatStreamOptions): Promise<Response> | Response;
   /** Krótki, jednostrzałowy call do generowania tytułu rozmowy. */
   generateTitle(opts: {
     model: string;
