@@ -10,13 +10,19 @@ import { issueAuthorizationCode } from "@/lib/api/oauth/codes";
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
+  console.log("[oauth/decision] POST received", {
+    contentType: req.headers.get("content-type"),
+    cookieHeader: req.headers.get("cookie")?.slice(0, 60) ?? "(none)",
+  });
   const supabase = await createSupabaseRouteHandlerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
+    console.log("[oauth/decision] no user — returning 401");
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+  console.log("[oauth/decision] user", user.id);
 
   const form = await req.formData();
   const decision = String(form.get("decision") ?? "");
