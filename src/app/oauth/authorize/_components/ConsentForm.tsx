@@ -12,8 +12,12 @@ interface Props {
 }
 
 /**
- * NATYWNY HTML form — zero zależności od React Button / Slot / forwardRef.
- * Dwa <button type="submit"> z `name="decision"`. Spinner via React state.
+ * NATYWNY HTML form. Bez `disabled` na buttonach — React 19 batchował
+ * re-render synchronicznie, button stawał się disabled w tej samej
+ * iteracji co onClick i przeglądarka blokowała natywny submit.
+ *
+ * Spinner pokazuje się przez CSS `:active` i overlay z React state
+ * (set bez wpływu na button.disabled).
  */
 export function ConsentForm(props: Props) {
   const [submitting, setSubmitting] = React.useState<"accept" | "reject" | null>(null);
@@ -22,11 +26,7 @@ export function ConsentForm(props: Props) {
     <form
       action="/oauth/authorize/decision"
       method="POST"
-      className="flex flex-col gap-3"
-      onSubmit={() => {
-        // dla diagnostyki w DevTools
-        console.log("[ConsentForm] submitting", submitting);
-      }}
+      className="flex flex-col gap-3 relative"
     >
       <input type="hidden" name="client_id" value={props.clientId} />
       <input type="hidden" name="redirect_uri" value={props.redirectUri} />
@@ -40,8 +40,7 @@ export function ConsentForm(props: Props) {
         name="decision"
         value="accept"
         onClick={() => setSubmitting("accept")}
-        disabled={submitting !== null}
-        className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-foreground text-background text-sm font-medium hover:bg-foreground/90 disabled:opacity-60 disabled:pointer-events-none"
+        className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-foreground text-background text-sm font-medium hover:bg-foreground/90 active:opacity-80"
       >
         {submitting === "accept" ? (
           <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
@@ -53,11 +52,17 @@ export function ConsentForm(props: Props) {
         name="decision"
         value="reject"
         onClick={() => setSubmitting("reject")}
-        disabled={submitting !== null}
-        className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-border bg-transparent text-sm font-medium hover:bg-foreground/5 disabled:opacity-60 disabled:pointer-events-none"
+        className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-border bg-transparent text-sm font-medium hover:bg-foreground/5 active:opacity-80"
       >
+        {submitting === "reject" ? (
+          <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+        ) : null}
         Odrzuć
       </button>
+
+      {submitting !== null ? (
+        <p className="text-xs text-muted text-center">Trwa przekierowanie…</p>
+      ) : null}
     </form>
   );
 }
