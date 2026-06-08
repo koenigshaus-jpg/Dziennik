@@ -6,6 +6,7 @@ import { ChevronLeft } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { EntryEditor } from "@/components/entry/EntryEditor";
 import { getEntry, type ClientEntry, type EntriesChangedDetail } from "@/lib/db-supabase";
+import { toIsoLocalDate } from "@/lib/dates";
 
 export default function EntryPage({
   params,
@@ -68,7 +69,13 @@ export default function EntryPage({
     <AppShell>
       <EntryPageContent
         entry={entry}
-        onUpdated={(fresh) => setEntry(fresh)}
+        onUpdated={(fresh) => {
+          setEntry(fresh);
+          const dayIso = toIsoLocalDate(new Date(fresh.createdAt));
+          const todayIso = toIsoLocalDate(new Date());
+          const href = dayIso === todayIso ? "/" : `/?d=${dayIso}`;
+          router.push(href);
+        }}
         onBack={() => router.back()}
       />
     </AppShell>
