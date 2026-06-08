@@ -86,6 +86,28 @@ export default async function DocsPage() {
         agentów (Claude, ChatGPT, własne skrypty).
       </p>
 
+      {/* Maszynowe specyfikacje — pierwsza rzecz, którą widzi agent */}
+      <div className="my-6 rounded-xl border border-sky-500/30 bg-sky-500/5 p-4">
+        <p className="font-medium mb-2">Dla agentów (ChatGPT, Claude, MCP):</p>
+        <ul className="space-y-1 text-sm">
+          <li>
+            <strong>OpenAPI 3.1:</strong>{" "}
+            <a href={`${baseUrl}/openapi.json`} className="font-mono underline">
+              {baseUrl}/openapi.json
+            </a>
+          </li>
+          <li>
+            <strong>Markdown spec (llms.txt):</strong>{" "}
+            <a href={`${baseUrl}/llms.txt`} className="font-mono underline">
+              {baseUrl}/llms.txt
+            </a>
+          </li>
+        </ul>
+        <p className="text-xs text-muted mt-2">
+          Wklej powyższy URL agentowi (np. „przeczytaj <code>{baseUrl}/openapi.json</code>") — od razu zrozumie strukturę API i wygeneruje requesty.
+        </p>
+      </div>
+
       <h2 id="intro">Wprowadzenie</h2>
       <p>
         Każde wywołanie musi mieć ważne uwierzytelnienie i jest powiązane z konkretnym

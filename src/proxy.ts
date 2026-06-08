@@ -13,6 +13,8 @@ const PUBLIC_PATHS = [
   "/api/v1",
   "/robots.txt",
   "/sitemap.xml",
+  "/openapi.json", // OpenAPI 3.1 spec dla agentów (ChatGPT, Claude, MCP)
+  "/llms.txt",      // Markdown spec konwencji llmstxt.org
 ];
 
 export async function proxy(req: NextRequest) {

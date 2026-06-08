@@ -11,7 +11,7 @@ export default function robots(): MetadataRoute.Robots {
     rules: [
       {
         userAgent: "*",
-        allow: ["/docs", "/docs/"],
+        allow: ["/docs", "/docs/", "/openapi.json", "/llms.txt"],
         disallow: ["/", "/api/", "/ustawienia/", "/historia", "/wpis/", "/login"],
       },
     ],
