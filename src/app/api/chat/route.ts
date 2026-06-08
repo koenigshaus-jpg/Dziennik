@@ -49,6 +49,12 @@ export async function POST(req: Request) {
 
   const persona = getPersona(body.personaKey as PersonaKey);
 
+  console.log(
+    `[/api/chat] day=${body.day} persona=${body.personaKey} ` +
+      `dayEntries=${body.dayEntries.length} entriesIndex=${body.entriesIndex.length} ` +
+      `messages=${body.messages.length}`
+  );
+
   const systemPrompt = buildSystemPrompt({
     persona,
     day: body.day,

@@ -130,8 +130,8 @@ export function AgentSheet({ day, initialMessage, initialPersonaKey, onClose }: 
       <div
         className={cn(
           "fixed z-40 bg-background border border-border shadow-2xl flex flex-col",
-          // Mobile: bottom sheet ~85vh
-          "left-0 right-0 bottom-0 rounded-t-2xl max-h-[85vh] h-[85vh] pt-[env(safe-area-inset-top)]",
+          // Mobile: bottom sheet ~85dvh (dvh = visible viewport bez URL bara Safari)
+          "left-0 right-0 bottom-0 rounded-t-2xl max-h-[85dvh] h-[85dvh] pt-[env(safe-area-inset-top)]",
           // Desktop: centered, węższy, nad ComposerBar
           "lg:left-1/2 lg:right-auto lg:bottom-20 lg:-translate-x-1/2 lg:rounded-2xl lg:w-[min(720px,90vw)] lg:h-[min(80vh,720px)] lg:max-h-[80vh] lg:pt-0"
         )}

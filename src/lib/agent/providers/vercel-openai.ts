@@ -3,7 +3,7 @@
 // nowy plik w tym katalogu + zmiana jednej linii w ../index.ts.
 
 import { openai } from "@ai-sdk/openai";
-import { generateText, streamText } from "ai";
+import { generateText, stepCountIs, streamText } from "ai";
 
 import type { ChatProvider, ChatStreamOptions } from "../provider";
 
@@ -21,6 +21,9 @@ export const vercelOpenAiProvider: ChatProvider = {
       // Przekazujemy je tu jako passthrough — typowanie luźne, bo provider
       // interface świadomie nie wie o typach SDK.
       tools: opts.tools as Parameters<typeof streamText>[0]["tools"],
+      // Bez tego AI SDK v6 kończy generowanie po pierwszym tool callu i model
+      // nigdy nie zobaczy wyniku fetchEntry — agent przestaje "widzieć" wpisy.
+      stopWhen: stepCountIs(8),
       abortSignal: opts.abortSignal,
     });
 
