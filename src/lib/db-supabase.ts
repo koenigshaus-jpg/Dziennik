@@ -465,8 +465,8 @@ export async function renameTag(
     .select("entry_id")
     .eq("tag_id", sourceId);
   if (linkErr) throw linkErr;
-  const affectedEntryIds = Array.from(
-    new Set((linkRows ?? []).map((r) => r.entry_id as string))
+  const affectedEntryIds: string[] = Array.from(
+    new Set((linkRows ?? []).map((r: { entry_id: string }) => r.entry_id))
   );
 
   let merged = false;
@@ -489,7 +489,7 @@ export async function renameTag(
         .in("entry_id", affectedEntryIds);
       if (etlErr) throw etlErr;
       const alreadyHasTarget = new Set(
-        (existingTargetLinks ?? []).map((r) => r.entry_id as string)
+        (existingTargetLinks ?? []).map((r: { entry_id: string }) => r.entry_id)
       );
       const needTargetLink = affectedEntryIds.filter(
         (id) => !alreadyHasTarget.has(id)
@@ -550,8 +550,8 @@ export async function deleteTag(name: string): Promise<void> {
     .select("entry_id")
     .eq("tag_id", tagId);
   if (linkErr) throw linkErr;
-  const affectedEntryIds = Array.from(
-    new Set((linkRows ?? []).map((r) => r.entry_id as string))
+  const affectedEntryIds: string[] = Array.from(
+    new Set((linkRows ?? []).map((r: { entry_id: string }) => r.entry_id))
   );
 
   const { error: delLnkErr } = await supabase
