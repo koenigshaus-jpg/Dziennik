@@ -20,6 +20,7 @@ import {
   toIsoLocalDate,
 } from "@/lib/dates";
 import { snippet } from "@/lib/text";
+import { guardLeave } from "@/lib/unsavedRegistry";
 import { parseMoods, MOODS } from "@/lib/moods";
 import { Image as ImageIcon, Mic, X } from "lucide-react";
 import { toast } from "sonner";
@@ -310,7 +311,8 @@ function HomePageInner() {
     pushFilters({});
   }
 
-  function selectEntry(id: string) {
+  async function selectEntry(id: string) {
+    if (!(await guardLeave())) return;
     router.replace(
       buildHref({
         q,

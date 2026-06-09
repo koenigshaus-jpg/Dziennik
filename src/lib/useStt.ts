@@ -12,13 +12,14 @@ interface UseSttReturn {
   recording: boolean;
   processing: boolean;
   elapsed: number;
+  maxSeconds: number;
   start: () => Promise<void>;
   stop: () => void;
 }
 
 export function useStt({
   onTranscript,
-  maxSeconds = 60,
+  maxSeconds = 300,
 }: UseSttOptions): UseSttReturn {
   const [recording, setRecording] = useState(false);
   const [processing, setProcessing] = useState(false);
@@ -126,5 +127,5 @@ export function useStt({
     };
   }, []);
 
-  return { recording, processing, elapsed, start, stop };
+  return { recording, processing, elapsed, maxSeconds, start, stop };
 }

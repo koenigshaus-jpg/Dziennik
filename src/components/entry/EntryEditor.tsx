@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect as useReactEffect } from "react";
 import { toast } from "sonner";
 import {
   Trash2,
@@ -35,6 +35,8 @@ import { deleteEntry, getEntry, type ClientEntry } from "@/lib/db-supabase";
 import { EntryForm, type EntryFormHandle } from "./EntryForm";
 import { useConversationsMeta } from "@/lib/agent/use-conversations-meta";
 import { PersonaBadgeRow } from "@/components/agent/PersonaBadge";
+import { useUnsavedGuard } from "@/lib/useUnsavedGuard";
+import { registerUnsaved, type LeaveDecision } from "@/lib/unsavedRegistry";
 
 interface Props {
   entry: ClientEntry;
@@ -59,6 +61,44 @@ export function EntryEditor({ entry, onUpdated, onDeleted, bodyClassName }: Prop
     processing: false,
   });
   const formRef = useRef<EntryFormHandle>(null);
+  const { pending: pendingNav, cancel: cancelNav, proceed: proceedNav } =
+    useUnsavedGuard(dirty);
+  const [savingBeforeLeave, setSavingBeforeLeave] = useState(false);
+  const [leavePromise, setLeavePromise] = useState<{
+    resolve: (d: LeaveDecision) => void;
+  } | null>(null);
+
+  useReactEffect(() => {
+    return registerUnsaved({
+      isDirty: () => dirty,
+      save: async () => {
+        await formRef.current?.save();
+      },
+      askLeave: () =>
+        new Promise<LeaveDecision>((resolve) => {
+          setLeavePromise({ resolve });
+        }),
+    });
+  }, [dirty]);
+
+  function resolveLeave(decision: LeaveDecision) {
+    const p = leavePromise;
+    setLeavePromise(null);
+    p?.resolve(decision);
+  }
+
+  async function handleSaveAndLeave() {
+    setSavingBeforeLeave(true);
+    try {
+      await formRef.current?.save();
+      proceedNav();
+    } catch (e) {
+      console.error(e);
+      toast.error("Nie udało się zapisać.");
+    } finally {
+      setSavingBeforeLeave(false);
+    }
+  }
 
   async function handleDelete() {
     setDeleting(true);
@@ -186,6 +226,58 @@ export function EntryEditor({ entry, onUpdated, onDeleted, bodyClassName }: Prop
           </Button>
         </div>
       </div>
+
+      <Dialog
+        open={pendingNav !== null || leavePromise !== null}
+        onOpenChange={(o) => {
+          if (!o) {
+            if (leavePromise) resolveLeave("cancel");
+            else cancelNav();
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Zapisać zmiany?</DialogTitle>
+            <DialogDescription>
+              Jeśli nie zapiszesz, edycja tego wpisu zostanie utracona.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <Button
+              variant="ghost"
+              onClick={() =>
+                leavePromise ? resolveLeave("cancel") : cancelNav()
+              }
+              disabled={savingBeforeLeave}
+              className="w-full sm:w-auto order-3 sm:order-none"
+            >
+              Anuluj
+            </Button>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <Button
+                onClick={() =>
+                  leavePromise ? resolveLeave("save") : handleSaveAndLeave()
+                }
+                disabled={savingBeforeLeave}
+                className="w-full sm:w-auto order-1 sm:order-2"
+              >
+                {savingBeforeLeave ? "Zapisuję…" : "Zapisz"}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() =>
+                  leavePromise ? resolveLeave("discard") : proceedNav()
+                }
+                disabled={savingBeforeLeave}
+                className="w-full sm:w-auto order-2 sm:order-1"
+              >
+                Nie zapisuj
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <div className={cn(bodyClassName, "lg:flex-1 lg:flex lg:flex-col lg:min-h-0")}>
         <EntryForm

@@ -69,7 +69,7 @@ export const ComposerBar = React.forwardRef<ComposerBarHandle, Props>(
     const selectedPersona = getPersona(personaKey);
     const PersonaIcon = getLucideIcon(selectedPersona.icon);
 
-    const { recording, processing, elapsed, start, stop } = useStt({
+    const { recording, processing, elapsed, maxSeconds, start, stop } = useStt({
       onTranscript: (text) => {
         setValue((prev) => (prev ? `${prev.trimEnd()} ${text}` : text));
         inputRef.current?.focus();
@@ -123,6 +123,26 @@ export const ComposerBar = React.forwardRef<ComposerBarHandle, Props>(
       adjustHeight(inputRef.current);
     }, [value]);
 
+    const rootRef = React.useRef<HTMLDivElement>(null);
+    React.useEffect(() => {
+      if (variant !== "mobile") return;
+      const el = rootRef.current;
+      if (!el) return;
+      const apply = () => {
+        document.documentElement.style.setProperty(
+          "--composer-h",
+          `${el.offsetHeight}px`
+        );
+      };
+      apply();
+      const ro = new ResizeObserver(apply);
+      ro.observe(el);
+      return () => {
+        ro.disconnect();
+        document.documentElement.style.removeProperty("--composer-h");
+      };
+    }, [variant]);
+
     const showSend = value.trim().length > 0;
 
     const outerClass =
@@ -131,7 +151,7 @@ export const ComposerBar = React.forwardRef<ComposerBarHandle, Props>(
         : "hidden lg:block fixed bottom-4 left-1/2 -translate-x-1/2 z-30 w-[min(640px,90vw)]";
 
     return (
-      <div className={outerClass}>
+      <div ref={rootRef} className={outerClass}>
         <div className="relative">
           {/* Delikatna kolorowa poświata à la Gemini */}
           <div
@@ -152,7 +172,7 @@ export const ComposerBar = React.forwardRef<ComposerBarHandle, Props>(
               >
                 <Square className="h-3.5 w-3.5 fill-current" />
                 <span className="text-xs tabular-nums">
-                  {formatSeconds(elapsed)}
+                  {formatSeconds(Math.max(0, maxSeconds - elapsed))}
                 </span>
               </button>
             ) : (

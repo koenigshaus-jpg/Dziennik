@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Loader2, Mic, Plus, Square } from "lucide-react";
 import { toast } from "sonner";
 import { createEntry } from "@/lib/db-supabase";
+import { guardLeave } from "@/lib/unsavedRegistry";
 import { createdAtForDay } from "@/lib/dates";
 import { useStt } from "@/lib/useStt";
 import { cn } from "@/lib/utils";
@@ -62,6 +63,7 @@ export function DayHeaderActions({ dayIso, todayIso }: Props) {
     e.preventDefault();
     e.stopPropagation();
     if (isBusy) return;
+    if (!(await guardLeave())) return;
     setCreating(true);
     try {
       const id = await createEntry({

@@ -1,7 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { Mic, Square, Loader2 } from "lucide-react";
+import { Mic, Loader2 } from "lucide-react";
+import { CountdownRing, formatCountdown } from "./CountdownRing";
 import { toast } from "sonner";
 import { createEntry } from "@/lib/db-supabase";
 import { createdAtForDay } from "@/lib/dates";
@@ -31,7 +32,7 @@ export function MicFab({ selectedDay }: Props) {
     selectedDayRef.current = selectedDay;
   }, [selectedDay]);
 
-  const { recording, processing, start, stop } = useStt({
+  const { recording, processing, elapsed, maxSeconds, start, stop } = useStt({
     onTranscript: async (text) => {
       const t = text.trim();
       if (!t) return;
@@ -74,19 +75,24 @@ export function MicFab({ selectedDay }: Props) {
           : "Nagraj nowy wpis"
       }
       className={cn(
-        "lg:hidden fixed right-4 bottom-[calc(env(safe-area-inset-bottom)+5rem)] z-40",
+        "lg:hidden fixed right-4 bottom-[calc(var(--composer-h,5rem)+0.75rem)] z-40",
         "inline-flex h-14 w-14 items-center justify-center rounded-full",
         "shadow-[var(--elevation-3)] transition-transform",
         recording
-          ? "bg-recording text-on-destructive animate-pulse"
+          ? "bg-recording text-on-destructive"
           : "bg-foreground text-background hover:scale-105 active:scale-95",
         isBusy && "opacity-70 cursor-not-allowed"
       )}
     >
+      {recording && (
+        <CountdownRing remaining={Math.max(0, maxSeconds - elapsed)} total={maxSeconds} />
+      )}
       {isBusy ? (
         <Loader2 className="h-6 w-6 animate-spin" />
       ) : recording ? (
-        <Square className="h-5 w-5 fill-current" />
+        <span className="text-[11px] font-medium tabular-nums leading-none">
+          {formatCountdown(Math.max(0, maxSeconds - elapsed))}
+        </span>
       ) : (
         <Mic className="h-6 w-6" />
       )}
