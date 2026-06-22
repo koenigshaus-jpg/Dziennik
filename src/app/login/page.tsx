@@ -9,6 +9,12 @@ import { seedGuestEntries } from "@/lib/seed-guest";
 
 type EmailMode = "signin" | "signup";
 
+// Jedno wspólne konto gościa — wszyscy „goście" logują się na te same dane,
+// widzą te same wpisy i mogą dokładać własne. To zwykłe konto e-mail/hasło,
+// nie anonimowa sesja. Konfigurowalne przez env, z domyślnymi wartościami.
+const GUEST_EMAIL = process.env.NEXT_PUBLIC_GUEST_EMAIL || "gosc@dziennik.local";
+const GUEST_PASSWORD = process.env.NEXT_PUBLIC_GUEST_PASSWORD || "dziennik-gosc";
+
 function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
@@ -44,16 +50,51 @@ function LoginForm() {
     setError(null);
     setInfo(null);
     const supabase = getSupabaseClient();
-    const { error } = await supabase.auth.signInAnonymously();
-    if (error) {
+
+    // Próba zalogowania na istniejące, wspólne konto gościa.
+    const { error } = await supabase.auth.signInWithPassword({
+      email: GUEST_EMAIL,
+      password: GUEST_PASSWORD,
+    });
+
+    // Logowanie się udało → konto już istnieje, nic nie seedujemy.
+    // Wpisy (demo + dodane przez innych gości) zostają na swoim miejscu.
+    if (!error) {
+      router.push(next);
+      router.refresh();
+      return;
+    }
+
+    // Pierwsze w historii wejście: konto gościa jeszcze nie istnieje → zakładamy
+    // je raz i tylko wtedy seedujemy przykładowymi wpisami.
+    const signUp = await supabase.auth.signUp({
+      email: GUEST_EMAIL,
+      password: GUEST_PASSWORD,
+    });
+    if (signUp.error) {
       setError(
-        "Tryb gościa wyłączony w Supabase. Włącz „Anonymous sign-ins” w Authentication → Sign In / Providers."
+        "Nie udało się otworzyć konta gościa. Spróbuj ponownie za chwilę."
       );
       setGuestLoading(false);
       return;
     }
-    // Seed przykładowych wpisów dla świeżego konta gościa.
-    // Idempotentne — jeśli wpisy już są, nic nie robi.
+    // Gdy weryfikacja e-mail jest włączona, signUp nie zwraca sesji —
+    // próbujemy zalogować się od razu.
+    if (!signUp.data.session) {
+      const retry = await supabase.auth.signInWithPassword({
+        email: GUEST_EMAIL,
+        password: GUEST_PASSWORD,
+      });
+      if (retry.error) {
+        setError(
+          "Konto gościa wymaga potwierdzenia e-mail — wyłącz „Confirm email” w Supabase (Authentication → Sign In / Providers)."
+        );
+        setGuestLoading(false);
+        return;
+      }
+    }
+    // Świeżo założone wspólne konto — seedujemy raz przykładowymi wpisami.
+    // Idempotentne: gdyby seed odpalił się ponownie, sam się pominie.
     try {
       await seedGuestEntries();
     } catch (e) {
