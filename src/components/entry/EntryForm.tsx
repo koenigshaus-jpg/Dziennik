@@ -18,7 +18,6 @@ import {
 } from "@/components/ui/dialog";
 import { formatDateTimeLocalInput, formatShortPL } from "@/lib/dates";
 import {
-  ImagePlus,
   Mic,
   Smile,
   Hash,
@@ -31,7 +30,6 @@ import {
 import { cn } from "@/lib/utils";
 import { MOOD_BY_KEY, serializeMoods, parseMoods } from "@/lib/moods";
 import { createEntry, updateEntry, newId } from "@/lib/db-supabase";
-import { compressImage } from "@/lib/clientImage";
 import { blobToDataUrl } from "@/lib/clientMedia";
 import { useStt } from "@/lib/useStt";
 
@@ -68,7 +66,6 @@ interface Props {
 
 export interface EntryFormHandle {
   save: () => Promise<void>;
-  openImagePicker: () => void;
   toggleAudioRecording: () => void;
   openPanel: (key: "mood" | "tags" | "date") => void;
 }
@@ -114,11 +111,8 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
   const [saving, setSaving] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
 
-  // images
-  const imageInputRef = useRef<HTMLInputElement>(null);
-  const [uploadingImage, setUploadingImage] = useState(false);
-  const [dragOver, setDragOver] = useState(false);
-  const dragDepthRef = useRef(0);
+  // images: dodawanie tymczasowo wyłączone (wróci w innej formie).
+  // Stan trzymamy tylko po to, by wyświetlać/zapisywać istniejące zdjęcia.
 
   // audio
   const [recording, setRecording] = useState(false);
@@ -143,31 +137,6 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
 
   function togglePanel(key: NonNullable<PanelKey>) {
     setOpenPanel((curr) => (curr === key ? null : key));
-  }
-
-  async function handleImageFiles(files: FileList | File[] | null) {
-    if (!files || files.length === 0) return;
-    setUploadingImage(true);
-    const added: UploadedMedia[] = [];
-    for (const original of Array.from(files)) {
-      try {
-        const compressed = await compressImage(original);
-        const dataUrl = await blobToDataUrl(compressed);
-        added.push({
-          id: newId(),
-          path: dataUrl,
-          mime: compressed.type || "image/jpeg",
-          size: compressed.size,
-          kind: "image",
-        });
-      } catch (e) {
-        console.error(e);
-        toast.error(`Nie udało się dodać ${original.name}.`);
-      }
-    }
-    setImages((curr) => [...curr, ...added]);
-    setUploadingImage(false);
-    if (imageInputRef.current) imageInputRef.current.value = "";
   }
 
   async function startRecording() {
@@ -276,7 +245,6 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
 
   useImperativeHandle(ref, () => ({
     save,
-    openImagePicker: () => imageInputRef.current?.click(),
     toggleAudioRecording: () => (recording ? stopRecording() : startRecording()),
     openPanel: (key) => setOpenPanel(key),
   }));
@@ -321,7 +289,7 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
   const panelTools: {
     key: NonNullable<PanelKey>;
     label: string;
-    icon: typeof ImagePlus;
+    icon: typeof Smile;
     badge?: string | null;
   }[] = [
     {
@@ -347,7 +315,6 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
     },
   ];
 
-  const imageBadge = images.length > 0 ? String(images.length) : null;
   const audioBadge = audio.length > 0 ? String(audio.length) : null;
   const selectedMoods = moods
     .map((k) => MOOD_BY_KEY[k])
@@ -425,51 +392,11 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
         </div>
       )}
       <div
-        onDragEnter={(e) => {
-          if (!Array.from(e.dataTransfer.types).includes("Files")) return;
-          e.preventDefault();
-          dragDepthRef.current += 1;
-          setDragOver(true);
-        }}
-        onDragOver={(e) => {
-          if (!Array.from(e.dataTransfer.types).includes("Files")) return;
-          e.preventDefault();
-          e.dataTransfer.dropEffect = "copy";
-        }}
-        onDragLeave={(e) => {
-          if (!Array.from(e.dataTransfer.types).includes("Files")) return;
-          dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
-          if (dragDepthRef.current === 0) setDragOver(false);
-        }}
-        onDrop={(e) => {
-          if (!Array.from(e.dataTransfer.types).includes("Files")) return;
-          e.preventDefault();
-          dragDepthRef.current = 0;
-          setDragOver(false);
-          const imageFiles = Array.from(e.dataTransfer.files).filter((f) =>
-            f.type.startsWith("image/")
-          );
-          if (imageFiles.length === 0) {
-            toast.error("Upuść plik graficzny.");
-            return;
-          }
-          handleImageFiles(imageFiles);
-        }}
         className={cn(
           "relative transition-colors",
           bare
-            ? cn(
-                "rounded-md min-h-32",
-                dragOver
-                  ? "outline-2 outline-dashed outline-foreground/40 bg-foreground/[0.04]"
-                  : ""
-              )
-            : cn(
-                "rounded-2xl border bg-background/60 px-6 pt-0.5 pb-7 sm:px-8 sm:pt-0.5 sm:pb-8 min-h-[224px] sm:min-h-[336px] lg:min-h-[416px] shadow-[0_1px_0_rgba(0,0,0,0.02),0_8px_30px_-12px_rgba(0,0,0,0.08)] lg:flex lg:flex-col",
-                dragOver
-                  ? "border-foreground/50 bg-foreground/[0.04]"
-                  : "border-border"
-              )
+            ? "rounded-md min-h-32"
+            : "rounded-2xl border border-border bg-background/60 px-6 pt-0.5 pb-7 sm:px-8 sm:pt-0.5 sm:pb-8 min-h-[224px] sm:min-h-[336px] lg:min-h-[416px] shadow-[0_1px_0_rgba(0,0,0,0.02),0_8px_30px_-12px_rgba(0,0,0,0.08)] lg:flex lg:flex-col"
         )}
       >
         <Editor
@@ -478,14 +405,6 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
           onChange={setContent}
           placeholder="Zacznij pisać…"
         />
-        {dragOver && (
-          <div className="pointer-events-none absolute inset-0 rounded-2xl border-2 border-dashed border-foreground/40 bg-background/70 flex items-center justify-center">
-            <div className="flex items-center gap-2 text-sm text-muted">
-              <ImagePlus className="h-4 w-4" />
-              Upuść zdjęcia, żeby dodać
-            </div>
-          </div>
-        )}
         {renderMicButton(
           bare
             ? "hidden lg:inline-flex lg:absolute lg:top-0 lg:right-0"
@@ -576,34 +495,6 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
             : "justify-center"
         )}
       >
-        {/* Photos: one-click → file picker */}
-        <button
-          type="button"
-          onClick={() => imageInputRef.current?.click()}
-          disabled={uploadingImage}
-          className={cn(baseBtn, imageBadge ? valueBtn : idleBtn)}
-        >
-          {uploadingImage ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <ImagePlus className="h-4 w-4" />
-          )}
-          <span>Dodaj zdjęcie</span>
-          {imageBadge && (
-            <span className="ml-0.5 text-xs font-medium opacity-70">
-              {imageBadge}
-            </span>
-          )}
-        </button>
-        <input
-          ref={imageInputRef}
-          type="file"
-          accept="image/*"
-          multiple
-          className="hidden"
-          onChange={(e) => handleImageFiles(e.target.files)}
-        />
-
         {/* Audio: one-click → start/stop recording */}
         <button
           type="button"

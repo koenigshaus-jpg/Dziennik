@@ -6,7 +6,6 @@ import {
   Trash2,
   Plus,
   ChevronDown,
-  ImagePlus,
   Mic,
   Smile,
   Hash,
@@ -151,12 +150,6 @@ export function EntryEditor({ entry, onUpdated, onDeleted, bodyClassName }: Prop
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuItem
-                  onSelect={() => formRef.current?.openImagePicker()}
-                >
-                  <ImagePlus className="h-4 w-4 text-muted" />
-                  <span>Dodaj zdjęcie</span>
-                </DropdownMenuItem>
                 <DropdownMenuItem
                   onSelect={() => formRef.current?.toggleAudioRecording()}
                 >
