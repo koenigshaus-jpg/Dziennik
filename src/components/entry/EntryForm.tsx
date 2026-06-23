@@ -19,6 +19,7 @@ import {
 import { formatDateTimeLocalInput, formatShortPL } from "@/lib/dates";
 import {
   Mic,
+  ImagePlus,
   Smile,
   Hash,
   Calendar,
@@ -31,6 +32,7 @@ import { cn } from "@/lib/utils";
 import { MOOD_BY_KEY, serializeMoods, parseMoods } from "@/lib/moods";
 import { createEntry, updateEntry, newId } from "@/lib/db-supabase";
 import { blobToDataUrl } from "@/lib/clientMedia";
+import { compressImage } from "@/lib/clientImage";
 import { useStt } from "@/lib/useStt";
 
 type PanelKey = "mood" | "tags" | "date" | null;
@@ -56,17 +58,12 @@ interface Props {
   bare?: boolean;
   onDirtyChange?: (dirty: boolean) => void;
   onSavingChange?: (saving: boolean) => void;
-  onAudioRecordingChange?: (state: {
-    recording: boolean;
-    elapsed: number;
-    processing: boolean;
-  }) => void;
   actionsSlot?: React.ReactNode;
 }
 
 export interface EntryFormHandle {
   save: () => Promise<void>;
-  toggleAudioRecording: () => void;
+  openImagePicker: () => void;
   openPanel: (key: "mood" | "tags" | "date") => void;
 }
 
@@ -85,7 +82,6 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
     bare = false,
     onDirtyChange,
     onSavingChange,
-    onAudioRecordingChange,
     actionsSlot,
   },
   ref
@@ -111,17 +107,14 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
   const [saving, setSaving] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
 
-  // images: dodawanie tymczasowo wyłączone (wróci w innej formie).
-  // Stan trzymamy tylko po to, by wyświetlać/zapisywać istniejące zdjęcia.
+  // images
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const dragDepthRef = useRef(0);
 
-  // audio
-  const [recording, setRecording] = useState(false);
-  const [elapsed, setElapsed] = useState(0);
-  const [processingAudio, setProcessingAudio] = useState(false);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
-  const timerRef = useRef<number | null>(null);
-  const startedAtRef = useRef<number>(0);
+  // audio: dodawanie wyłączone (narazie). Stan trzymamy tylko po to, by
+  // wyświetlać/zapisywać istniejące nagrania ze starych wpisów.
 
   // speech-to-text (via shared hook)
   const editorRef = useRef<EditorHandle>(null);
@@ -139,66 +132,35 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
     setOpenPanel((curr) => (curr === key ? null : key));
   }
 
-  async function startRecording() {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mr = new MediaRecorder(stream, { audioBitsPerSecond: 32000 });
-      mediaRecorderRef.current = mr;
-      chunksRef.current = [];
-      mr.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data);
-      };
-      mr.onstop = async () => {
-        stream.getTracks().forEach((t) => t.stop());
-        const blob = new Blob(chunksRef.current, {
-          type: mr.mimeType || "audio/webm",
+  async function handleImageFiles(files: FileList | File[] | null) {
+    if (!files || files.length === 0) return;
+    setUploadingImage(true);
+    const added: UploadedMedia[] = [];
+    for (const original of Array.from(files)) {
+      try {
+        const compressed = await compressImage(original);
+        const dataUrl = await blobToDataUrl(compressed);
+        added.push({
+          id: newId(),
+          path: dataUrl,
+          mime: compressed.type || "image/jpeg",
+          size: compressed.size,
+          kind: "image",
         });
-        setProcessingAudio(true);
-        try {
-          const mime = (blob.type || "audio/webm").split(";")[0];
-          const dataUrl = await blobToDataUrl(blob);
-          setAudio((curr) => [
-            ...curr,
-            {
-              id: newId(),
-              path: dataUrl,
-              mime,
-              size: blob.size,
-              kind: "audio",
-            },
-          ]);
-        } catch (e) {
-          console.error(e);
-          toast.error("Nie udało się zapisać nagrania.");
-        } finally {
-          setProcessingAudio(false);
-        }
-      };
-      mr.start();
-      startedAtRef.current = Date.now();
-      setElapsed(0);
-      timerRef.current = window.setInterval(() => {
-        setElapsed((Date.now() - startedAtRef.current) / 1000);
-      }, 250);
-      setRecording(true);
-    } catch (e) {
-      toast.error("Nie udało się włączyć mikrofonu.");
-      console.error(e);
+      } catch (e) {
+        console.error(e);
+        toast.error(`Nie udało się dodać ${original.name}.`);
+      }
     }
-  }
-
-  function stopRecording() {
-    mediaRecorderRef.current?.stop();
-    if (timerRef.current) {
-      window.clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-    setRecording(false);
+    setImages((curr) => [...curr, ...added]);
+    setUploadingImage(false);
+    if (imageInputRef.current) imageInputRef.current.value = "";
   }
 
   async function save() {
-    const isEmpty = !content || content.replace(/<[^>]+>/g, "").trim() === "";
-    if (isEmpty) {
+    const noText = !content || content.replace(/<[^>]+>/g, "").trim() === "";
+    const noMedia = images.length === 0 && audio.length === 0;
+    if (noText && noMedia) {
       toast.error("Wpis nie może być pusty.");
       return;
     }
@@ -245,13 +207,9 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
 
   useImperativeHandle(ref, () => ({
     save,
-    toggleAudioRecording: () => (recording ? stopRecording() : startRecording()),
+    openImagePicker: () => imageInputRef.current?.click(),
     openPanel: (key) => setOpenPanel(key),
   }));
-
-  useEffect(() => {
-    onAudioRecordingChange?.({ recording, elapsed, processing: processingAudio });
-  }, [recording, elapsed, processingAudio, onAudioRecordingChange]);
 
   useEffect(() => {
     onSavingChange?.(saving);
@@ -260,8 +218,9 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
   useEffect(() => {
     if (!onDirtyChange) return;
     if (mode === "create") {
-      const isEmpty = !content || content.replace(/<[^>]+>/g, "").trim() === "";
-      onDirtyChange(!isEmpty);
+      const noText = !content || content.replace(/<[^>]+>/g, "").trim() === "";
+      const noMedia = images.length === 0 && audio.length === 0;
+      onDirtyChange(!(noText && noMedia));
       return;
     }
     if (!initial) {
@@ -315,7 +274,6 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
     },
   ];
 
-  const audioBadge = audio.length > 0 ? String(audio.length) : null;
   const selectedMoods = moods
     .map((k) => MOOD_BY_KEY[k])
     .filter((m): m is NonNullable<typeof m> => !!m);
@@ -391,12 +349,59 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
           ))}
         </div>
       )}
+      {/* Zdjęcia: nad treścią wpisu */}
+      {images.length > 0 && (
+        <MediaThumbs
+          value={images}
+          onRemove={(id) => setImages(images.filter((x) => x.id !== id))}
+        />
+      )}
       <div
+        onDragEnter={(e) => {
+          if (!Array.from(e.dataTransfer.types).includes("Files")) return;
+          e.preventDefault();
+          dragDepthRef.current += 1;
+          setDragOver(true);
+        }}
+        onDragOver={(e) => {
+          if (!Array.from(e.dataTransfer.types).includes("Files")) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "copy";
+        }}
+        onDragLeave={(e) => {
+          if (!Array.from(e.dataTransfer.types).includes("Files")) return;
+          dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+          if (dragDepthRef.current === 0) setDragOver(false);
+        }}
+        onDrop={(e) => {
+          if (!Array.from(e.dataTransfer.types).includes("Files")) return;
+          e.preventDefault();
+          dragDepthRef.current = 0;
+          setDragOver(false);
+          const imageFiles = Array.from(e.dataTransfer.files).filter((f) =>
+            f.type.startsWith("image/")
+          );
+          if (imageFiles.length === 0) {
+            toast.error("Upuść plik graficzny.");
+            return;
+          }
+          handleImageFiles(imageFiles);
+        }}
         className={cn(
           "relative transition-colors",
           bare
-            ? "rounded-md min-h-32"
-            : "rounded-2xl border border-border bg-background/60 px-6 pt-0.5 pb-7 sm:px-8 sm:pt-0.5 sm:pb-8 min-h-[224px] sm:min-h-[336px] lg:min-h-[416px] shadow-[0_1px_0_rgba(0,0,0,0.02),0_8px_30px_-12px_rgba(0,0,0,0.08)] lg:flex lg:flex-col"
+            ? cn(
+                "rounded-md min-h-32",
+                dragOver
+                  ? "outline-2 outline-dashed outline-foreground/40 bg-foreground/[0.04]"
+                  : ""
+              )
+            : cn(
+                "rounded-2xl border bg-background/60 px-6 pt-0.5 pb-7 sm:px-8 sm:pt-0.5 sm:pb-8 min-h-[224px] sm:min-h-[336px] lg:min-h-[416px] shadow-[0_1px_0_rgba(0,0,0,0.02),0_8px_30px_-12px_rgba(0,0,0,0.08)] lg:flex lg:flex-col",
+                dragOver
+                  ? "border-foreground/50 bg-foreground/[0.04]"
+                  : "border-border"
+              )
         )}
       >
         <Editor
@@ -410,39 +415,22 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
             ? "hidden lg:inline-flex lg:absolute lg:top-0 lg:right-0"
             : "absolute top-0 right-0"
         )}
-        {!bare && (images.length > 0 || audio.length > 0) && (
-          <div className="hidden lg:flex flex-col gap-3 lg:mt-auto lg:pt-4 lg:pr-12">
-            <MediaThumbs
-              value={images}
-              onRemove={(id) => setImages(images.filter((x) => x.id !== id))}
-            />
-            <AudioList
-              value={audio}
-              onRemove={(id) => setAudio(audio.filter((x) => x.id !== id))}
-            />
+        {dragOver && (
+          <div className="pointer-events-none absolute inset-0 rounded-2xl border-2 border-dashed border-foreground/40 bg-background/70 flex items-center justify-center">
+            <div className="flex items-center gap-2 text-sm text-muted">
+              <ImagePlus className="h-4 w-4" />
+              Upuść zdjęcia, żeby dodać
+            </div>
           </div>
         )}
       </div>
 
-      {(images.length > 0 || audio.length > 0) && (
-        <div
-          className={cn(
-            "flex flex-col gap-3",
-            !bare && "lg:hidden",
-            bare && "lg:mt-auto"
-          )}
-        >
-          <MediaThumbs
-            value={images}
-            onRemove={(id) => setImages(images.filter((x) => x.id !== id))}
-          />
-          <AudioList
-            value={audio}
-            onRemove={(id) => setAudio(audio.filter((x) => x.id !== id))}
-          />
-        </div>
+      {audio.length > 0 && (
+        <AudioList
+          value={audio}
+          onRemove={(id) => setAudio(audio.filter((x) => x.id !== id))}
+        />
       )}
-
 
       <div
         className={cn(
@@ -456,77 +444,76 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
         renderMicButton(
           "lg:hidden absolute -top-12 right-4"
         )}
-      {bare &&
-        (recording ? (
-          <button
-            type="button"
-            onClick={stopRecording}
-            className="inline-flex items-center justify-center gap-1.5 w-full h-9 px-3 rounded-full border bg-recording text-on-destructive border-recording hover:bg-recording/90 text-sm transition-colors"
-          >
-            <Square className="h-3.5 w-3.5 fill-current" />
-            <span>Nagrywam {formatSeconds(elapsed)}</span>
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setToolsOpen((v) => !v)}
-            aria-expanded={toolsOpen}
-            className="inline-flex items-center justify-between gap-2 w-full h-9 px-3 rounded-full border border-border text-sm text-muted hover:bg-foreground/5 transition-colors"
-          >
-            <span className="inline-flex items-center gap-1.5">
-              <Plus className="h-4 w-4" />
-              Dodaj element
-            </span>
-            <ChevronDown
-              className={cn(
-                "h-4 w-4 transition-transform",
-                toolsOpen ? "rotate-180" : ""
-              )}
-            />
-          </button>
-        ))}
+      {/* Mobile: „Dodaj zdjęcie" po lewej od mikrofonu, w jego rozmiarze */}
+      {bare && (
+        <button
+          type="button"
+          onClick={() => imageInputRef.current?.click()}
+          disabled={uploadingImage}
+          aria-label="Dodaj zdjęcie"
+          className={cn(
+            "lg:hidden absolute -top-12 right-16 z-20",
+            "inline-flex items-center justify-center gap-1.5 h-10 px-3 rounded-full",
+            "border border-border bg-background text-muted text-sm transition-colors",
+            "shadow-[var(--elevation-2)] hover:text-foreground hover:bg-foreground/5",
+            uploadingImage && "opacity-70 cursor-not-allowed"
+          )}
+        >
+          {uploadingImage ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <ImagePlus className="h-4 w-4" />
+          )}
+          <span>Dodaj zdjęcie</span>
+        </button>
+      )}
+      {bare && (
+        <button
+          type="button"
+          onClick={() => setToolsOpen((v) => !v)}
+          aria-expanded={toolsOpen}
+          className="inline-flex items-center justify-between gap-2 w-full h-9 px-3 rounded-full border border-border text-sm text-muted hover:bg-foreground/5 transition-colors"
+        >
+          <span className="inline-flex items-center gap-1.5">
+            <Plus className="h-4 w-4" />
+            Dodaj element
+          </span>
+          <ChevronDown
+            className={cn(
+              "h-4 w-4 transition-transform",
+              toolsOpen ? "rotate-180" : ""
+            )}
+          />
+        </button>
+      )}
       <div
         className={cn(
           "flex flex-wrap gap-2",
-          bare
-            ? recording || !toolsOpen
-              ? "hidden"
-              : "justify-start"
-            : "justify-center"
+          bare ? (!toolsOpen ? "hidden" : "justify-start") : "justify-center"
         )}
       >
-        {/* Audio: one-click → start/stop recording */}
-        <button
-          type="button"
-          onClick={recording ? stopRecording : startRecording}
-          disabled={processingAudio}
-          className={cn(
-            baseBtn,
-            recording
-              ? "bg-recording text-on-destructive border-recording hover:bg-recording/90"
-              : audioBadge
-              ? valueBtn
-              : idleBtn
-          )}
-        >
-          {processingAudio ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : recording ? (
-            <Square className="h-4 w-4 fill-current" />
-          ) : (
-            <Mic className="h-4 w-4" />
-          )}
-          <span>
-            {recording
-              ? `Zatrzymaj (${formatSeconds(elapsed)})`
-              : "Nagraj audio"}
-          </span>
-          {!recording && audioBadge && (
-            <span className="ml-0.5 text-xs font-medium opacity-70">
-              {audioBadge}
-            </span>
-          )}
-        </button>
+        {/* Zdjęcia: na desktopie/stronie tworzenia pill w toolbarze.
+            Na mobile/bare jest osobny przycisk przy mikrofonie wyżej. */}
+        {!bare && (
+          <button
+            type="button"
+            onClick={() => imageInputRef.current?.click()}
+            disabled={uploadingImage}
+            className={cn(baseBtn, images.length > 0 ? valueBtn : idleBtn)}
+          >
+            {uploadingImage ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <ImagePlus className="h-4 w-4" />
+            )}
+            <span>Dodaj zdjęcie</span>
+            {images.length > 0 && (
+              <span className="ml-0.5 text-xs font-medium opacity-70">
+                {images.length}
+              </span>
+            )}
+          </button>
+        )}
 
         {/* Panel-based tools */}
         {panelTools.map((t) => {
@@ -562,6 +549,15 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
       </div>
       {actionsSlot && <div className="lg:hidden">{actionsSlot}</div>}
       </div>
+
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={(e) => handleImageFiles(e.target.files)}
+      />
 
       <Dialog
         open={!!openPanel}

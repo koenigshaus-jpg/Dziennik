@@ -34,6 +34,7 @@ import { MobileEntryList } from "@/components/mobile/MobileEntryList";
 import { ComposerBar } from "@/components/mobile/ComposerBar";
 import { MicFab } from "@/components/mobile/MicFab";
 import { AddFab } from "@/components/mobile/AddFab";
+import { PhotoFab } from "@/components/mobile/PhotoFab";
 import { APP_VERSION } from "@/lib/version";
 
 const STRIP_BACK_DAYS_INITIAL = 30;
@@ -683,6 +684,7 @@ function HomePageInner() {
         )}
       </div>
       <AddFab selectedDay={selectedDay} />
+      <PhotoFab selectedDay={selectedDay} />
       <MicFab selectedDay={selectedDay} />
       <div className="fixed bottom-0 inset-x-0 z-30">
         <ComposerBar variant="mobile" selectedDay={selectedDay} />

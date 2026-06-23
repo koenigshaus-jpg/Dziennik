@@ -6,11 +6,10 @@ import {
   Trash2,
   Plus,
   ChevronDown,
-  Mic,
+  ImagePlus,
   Smile,
   Hash,
   Calendar,
-  Square,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -44,21 +43,10 @@ interface Props {
   bodyClassName?: string;
 }
 
-function formatSeconds(s: number): string {
-  const m = Math.floor(s / 60);
-  const sec = Math.floor(s % 60);
-  return `${m}:${sec.toString().padStart(2, "0")}`;
-}
-
 export function EntryEditor({ entry, onUpdated, onDeleted, bodyClassName }: Props) {
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [audioState, setAudioState] = useState({
-    recording: false,
-    elapsed: 0,
-    processing: false,
-  });
   const formRef = useRef<EntryFormHandle>(null);
   const { pending: pendingNav, cancel: cancelNav, proceed: proceedNav } =
     useUnsavedGuard(dirty);
@@ -128,16 +116,6 @@ export function EntryEditor({ entry, onUpdated, onDeleted, bodyClassName }: Prop
           )}
         </div>
         <div className="flex items-center gap-2">
-          {audioState.recording ? (
-            <button
-              type="button"
-              onClick={() => formRef.current?.toggleAudioRecording()}
-              className="hidden lg:inline-flex items-center gap-1.5 h-9 px-3 rounded-full border bg-recording text-on-destructive border-recording hover:bg-recording/90 text-sm transition-colors"
-            >
-              <Square className="h-3.5 w-3.5 fill-current" />
-              <span>Nagrywam {formatSeconds(audioState.elapsed)}</span>
-            </button>
-          ) : (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
@@ -151,10 +129,10 @@ export function EntryEditor({ entry, onUpdated, onDeleted, bodyClassName }: Prop
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuItem
-                  onSelect={() => formRef.current?.toggleAudioRecording()}
+                  onSelect={() => formRef.current?.openImagePicker()}
                 >
-                  <Mic className="h-4 w-4 text-muted" />
-                  <span>Nagraj audio</span>
+                  <ImagePlus className="h-4 w-4 text-muted" />
+                  <span>Dodaj zdjęcie</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onSelect={() => formRef.current?.openPanel("mood")}
@@ -176,7 +154,6 @@ export function EntryEditor({ entry, onUpdated, onDeleted, bodyClassName }: Prop
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-          )}
           <Dialog>
             <DialogTrigger asChild>
               <button
@@ -288,7 +265,6 @@ export function EntryEditor({ entry, onUpdated, onDeleted, bodyClassName }: Prop
           }}
           onDirtyChange={setDirty}
           onSavingChange={setSaving}
-          onAudioRecordingChange={setAudioState}
           onSaved={async (id) => {
             setDirty(false);
             try {
