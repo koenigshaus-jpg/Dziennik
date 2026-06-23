@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { tool } from "ai";
 
 import { parseJson, withApiHandler, ApiError } from "@/lib/api/handler";
 import {
@@ -11,7 +10,7 @@ import {
   listMessages,
   setLastPersona,
 } from "@/lib/api/chat-repo";
-import { buildChatContext, fetchEntryServer } from "@/lib/api/chat-context";
+import { hybridSearchEntries } from "@/lib/api/hybrid-search";
 import { todayInWarsaw } from "@/lib/api/dates";
 import {
   buildSystemPrompt,
@@ -61,25 +60,11 @@ export const POST = withApiHandler(async (req, { user }) => {
 
   const persona = getPersona(conversation.persona_key);
 
-  // 2) Kontekst dnia + indeks pozostałych — server-side z Supabase
-  const { dayEntries, entriesIndex } = await buildChatContext(user.userId, day);
-  const systemPrompt = buildSystemPrompt({ persona, day, dayEntries, entriesIndex });
+  // 2) Retrieval: hybrydowe wyszukiwanie wpisów pod treść pytania (server-side)
+  const retrieved = await hybridSearchEntries(user.userId, body.text, { day });
+  const systemPrompt = buildSystemPrompt({ persona, day, retrieved });
 
-  // 3) Tool fetchEntry — server-executed (klient nie ma dostępu do DB usera)
-  const tools = {
-    fetchEntry: tool({
-      description:
-        "Pobiera pełną treść wpisu z dziennika po id (id z indeksu w system prompcie).",
-      inputSchema: z.object({ id: z.string() }),
-      execute: async ({ id }: { id: string }) => {
-        const entry = await fetchEntryServer(user.userId, id);
-        if (!entry) return { error: "not_found" };
-        return entry;
-      },
-    }),
-  };
-
-  // 4) Zbuduj messages do modelu — historia + nowa wiadomość usera
+  // 3) Zbuduj messages do modelu — historia + nowa wiadomość usera
   // Format zgodny z UIMessageInput (tablice parts) — tak woła to provider
   type UIMessage = {
     id: string;
@@ -97,17 +82,16 @@ export const POST = withApiHandler(async (req, { user }) => {
 
   const model = body.deep_mode ? persona.deepModel : persona.defaultModel;
 
-  // 5) Generuj odpowiedź (non-streaming)
+  // 4) Generuj odpowiedź (non-streaming)
   const result = await getChatProvider().generateChat({
     systemPrompt,
     messages: uiMessages,
     model,
     temperature: persona.temperature,
-    tools,
     abortSignal: req.signal,
   });
 
-  // 6) Persystencja: user msg + assistant msg, update last_persona
+  // 5) Persystencja: user msg + assistant msg, update last_persona
   const [, assistantRow] = await appendMessages(conversation.id, [
     { role: "user", content: body.text },
     { role: "assistant", content: result.content },

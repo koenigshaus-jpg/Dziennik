@@ -1,74 +1,83 @@
-import type { PersonaConfig, EntryFull, EntryIndexItem } from "./types";
+import type { PersonaConfig, RetrievedEntry } from "./types";
 
 interface BuildSystemPromptOptions {
   persona: PersonaConfig;
   /** Dzień w którym jest użytkownik, YYYY-MM-DD. */
   day: string;
-  /** Pełna treść wpisów z tego dnia. */
-  dayEntries: EntryFull[];
-  /** Indeks wpisów z pozostałych dni (id + snippet + tagi + data). */
-  entriesIndex: EntryIndexItem[];
+  /** Wpisy z wyszukiwania hybrydowego — najtrafniejsze semantycznie/słowowo + ostatnie dni. */
+  retrieved: RetrievedEntry[];
 }
 
 /**
- * Składa system prompt: prompt persony + kontekst dnia + wpisy bieżącego dnia
- * (pełna treść) + indeks pozostałych wpisów. Pełną treść konkretnego wpisu
- * model dociąga przez tool `fetchEntry({ id })`.
+ * Składa system prompt: prompt persony + kontekst dnia + wpisy dostarczone przez
+ * wyszukiwanie hybrydowe. Wpisy dzielimy na dwie grupy:
+ *  - „najtrafniejsze" (trafienie semantyczne lub po słowach kluczowych),
+ *  - „ostatnie 7 dni" (wpisy z okna czasowego, zawsze dołączane).
+ * Model odpowiada WYŁĄCZNIE na podstawie tych wpisów — nie zgaduje treści spoza nich.
  */
 export function buildSystemPrompt(opts: BuildSystemPromptOptions): string {
-  const { persona, day, dayEntries, entriesIndex } = opts;
+  const { persona, day, retrieved } = opts;
 
   const parts: string[] = [];
-
   parts.push(persona.systemPrompt.trim());
 
   parts.push("\n\n— — —\n\nKONTEKST UŻYTKOWNIKA\n");
   parts.push(`Dzisiaj jest ${formatDayPl(day)}.\n`);
 
-  if (dayEntries.length === 0) {
-    parts.push("\nUżytkownik nie ma żadnych wpisów z tego dnia.\n");
-  } else {
-    parts.push(`\nWpisy z tego dnia (${dayEntries.length}) — pełna treść:\n`);
-    renderFullEntries(dayEntries, parts);
+  // Podział: trafienia z wyszukiwania (vector/keyword) vs tylko „ostatnie dni".
+  const matched = retrieved.filter(
+    (e) => e.sources.includes("vector") || e.sources.includes("keyword")
+  );
+  const recentOnly = retrieved.filter(
+    (e) => !e.sources.includes("vector") && !e.sources.includes("keyword")
+  );
+
+  parts.push(
+    "\nPoniżej wpisy z dziennika dobrane wyszukiwaniem do pytania użytkownika. " +
+      "Opieraj odpowiedź WYŁĄCZNIE na nich — nie zmyślaj treści, których tu nie ma. " +
+      "Jeśli wpisy nie zawierają odpowiedzi, powiedz to wprost.\n"
+  );
+
+  if (matched.length > 0) {
+    parts.push(
+      `\n— — —\n\nNAJTRAFNIEJSZE WPISY (${matched.length}) — pełna treść:\n`
+    );
+    renderEntries(matched, parts);
   }
 
-  if (entriesIndex.length > 0) {
+  if (recentOnly.length > 0) {
     parts.push(
-      `\n— — —\n\nINDEKS POZOSTAŁYCH WPISÓW (${entriesIndex.length})\n`
+      `\n— — —\n\nOSTATNIE 7 DNI (${recentOnly.length}) — pełna treść:\n`
     );
-    parts.push(
-      "Poniżej lista wszystkich wpisów z poprzednich dni — tylko skrót. " +
-        "Gdy potrzebujesz pełnej treści konkretnego wpisu, wywołaj narzędzie " +
-        "`fetchEntry({ id })` z `id` z tej listy. Nie zgaduj treści — sięgaj " +
-        "po wpis przez narzędzie zawsze gdy jest istotny dla rozmowy.\n"
-    );
-    renderIndex(entriesIndex, parts);
+    renderEntries(recentOnly, parts);
+  }
+
+  if (matched.length === 0 && recentOnly.length === 0) {
+    parts.push("\nBrak wpisów pasujących do pytania i z ostatnich dni.\n");
   }
 
   return parts.join("");
 }
 
-function renderFullEntries(entries: EntryFull[], parts: string[]) {
+const SOURCE_LABEL: Record<string, string> = {
+  vector: "trafienie semantyczne",
+  keyword: "słowa kluczowe",
+  recent: "ostatnie 7 dni",
+};
+
+function renderEntries(entries: RetrievedEntry[], parts: string[]) {
   entries.forEach((entry, idx) => {
+    const labels = entry.sources.map((s) => SOURCE_LABEL[s] ?? s).join(", ");
     parts.push(
-      `\n[Wpis ${idx + 1}${entry.title ? ` — ${entry.title}` : ""}] (id: ${entry.id})\n`
+      `\n[Wpis ${idx + 1} — ${formatDayPl(entry.date)}] (id: ${entry.id})` +
+        (labels ? ` [${labels}]` : "") +
+        "\n"
     );
     if (entry.mood) parts.push(`Nastrój: ${entry.mood}\n`);
     if (entry.tags?.length) parts.push(`Tagi: ${entry.tags.join(", ")}\n`);
     parts.push("\n");
     parts.push(entry.plainText.trim());
     parts.push("\n");
-  });
-}
-
-function renderIndex(entries: EntryIndexItem[], parts: string[]) {
-  parts.push("\n");
-  entries.forEach((entry) => {
-    const title = entry.title ? ` — ${entry.title}` : "";
-    parts.push(`- ${formatDayPl(entry.date)}${title} (id: ${entry.id})\n`);
-    if (entry.mood) parts.push(`  Nastrój: ${entry.mood}\n`);
-    if (entry.tags?.length) parts.push(`  Tagi: ${entry.tags.join(", ")}\n`);
-    parts.push(`  Skrót: ${entry.snippet}\n`);
   });
 }
 

@@ -4,7 +4,6 @@ import * as React from "react";
 import { useChat } from "@ai-sdk/react";
 import {
   DefaultChatTransport,
-  lastAssistantMessageIsCompleteWithToolCalls,
   type UIMessage,
   type ToolUIPart,
 } from "ai";
@@ -30,8 +29,6 @@ import {
 } from "@/lib/agent/client-state";
 import { getPersona } from "@/lib/agent/personas";
 import type { PersonaKey } from "@/lib/agent/types";
-import { buildEntriesContext } from "@/lib/agent/entries-context";
-import { getEntry } from "@/lib/db-supabase";
 import {
   appendMessage,
   createConversation,
@@ -266,19 +263,15 @@ function AgentChatInstance({
     () =>
       new DefaultChatTransport({
         api: "/api/chat",
-        prepareSendMessagesRequest: async ({ messages }) => {
-          const { dayEntries, entriesIndex } = await buildEntriesContext(day);
-          // Wysyłamy całe UI messages (zawierają tool calls + outputs).
-          // Serwer konwertuje przez convertToModelMessages — inaczej po
-          // fetchEntry model nie widzi wyniku i pętli się wołając tool ponownie.
+        prepareSendMessagesRequest: ({ messages }) => {
+          // Retrieval (hybrid search) dzieje się serwerowo na podstawie ostatniej
+          // wiadomości usera — klient wysyła tylko rozmowę + kontekst dnia/persony.
           return {
             body: {
               messages,
               personaKey,
               deepMode: getDeepMode(personaKey),
               day,
-              dayEntries,
-              entriesIndex,
             },
           };
         },
@@ -286,34 +279,10 @@ function AgentChatInstance({
     [day, personaKey]
   );
 
-  const { messages, sendMessage, status, error, addToolResult, stop } =
+  const { messages, sendMessage, status, error, stop } =
     useChat({
       messages: existingMessages.map(uiMessageFromStored),
       transport,
-      // AI SDK v6: po wykonaniu client-side toola (fetchEntry) wysyła
-      // wynik z powrotem do serwera, żeby model dokończył odpowiedź.
-      sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
-      onToolCall: async ({ toolCall }) => {
-        if (toolCall.toolName !== "fetchEntry") return;
-        const id = (toolCall.input as { id: string }).id;
-        const entry = await getEntry(id);
-        const result = entry
-          ? {
-              id: entry.id,
-              createdAt: new Date(entry.createdAt).toISOString(),
-              plainText: entry.contentText,
-              mood: entry.mood ?? null,
-              tags: entry.tags,
-            }
-          : { error: "Wpis nie znaleziony." };
-        // Bez await — addToolResult kolejkuje się przez SerialJobExecutor,
-        // a my jesteśmy już w job-ie (runUpdateMessageJob). await tu = deadlock.
-        void addToolResult({
-          tool: "fetchEntry",
-          toolCallId: toolCall.toolCallId,
-          output: result,
-        });
-      },
       onFinish: async ({ message }) => {
         try {
           // Upewnij się że istnieje rozmowa.

@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
 
 import {
-  agentTools,
   buildSystemPrompt,
   getChatProvider,
   getPersona,
   type ChatRequestPayload,
   type PersonaKey,
 } from "@/lib/agent";
+import { createSupabaseRouteHandlerClient } from "@/lib/supabase/server";
+import { hybridSearchEntries } from "@/lib/api/hybrid-search";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -19,10 +20,28 @@ function isValidPayload(value: unknown): value is ChatRequestPayload {
     Array.isArray(v.messages) &&
     typeof v.personaKey === "string" &&
     typeof v.deepMode === "boolean" &&
-    typeof v.day === "string" &&
-    Array.isArray(v.dayEntries) &&
-    Array.isArray(v.entriesIndex)
+    typeof v.day === "string"
   );
+}
+
+/** Wyciąga tekst ostatniej wiadomości użytkownika (UIMessage z parts[]). */
+function lastUserText(messages: unknown[]): string {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i] as { role?: string; parts?: unknown[] };
+    if (m?.role !== "user") continue;
+    const parts = Array.isArray(m.parts) ? m.parts : [];
+    return parts
+      .filter(
+        (p): p is { type: string; text: string } =>
+          !!p &&
+          typeof (p as { type?: unknown }).type === "string" &&
+          (p as { type: string }).type === "text"
+      )
+      .map((p) => p.text)
+      .join("")
+      .trim();
+  }
+  return "";
 }
 
 export async function POST(req: Request) {
@@ -41,26 +60,31 @@ export async function POST(req: Request) {
   }
 
   if (!isValidPayload(body)) {
-    return NextResponse.json(
-      { error: "Niepoprawny payload." },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "Niepoprawny payload." }, { status: 400 });
+  }
+
+  // Tożsamość użytkownika z sesji (cookies). /api/chat jest za auth (proxy.ts).
+  const supabase = await createSupabaseRouteHandlerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Niezalogowany." }, { status: 401 });
   }
 
   const persona = getPersona(body.personaKey as PersonaKey);
 
+  // Retrieval: hybrydowe wyszukiwanie wpisów pod ostatnie pytanie użytkownika.
+  const query = lastUserText(body.messages);
+  const retrieved = await hybridSearchEntries(user.id, query, { day: body.day });
+
   console.log(
     `[/api/chat] day=${body.day} persona=${body.personaKey} ` +
-      `dayEntries=${body.dayEntries.length} entriesIndex=${body.entriesIndex.length} ` +
+      `query="${query.slice(0, 60)}" retrieved=${retrieved.length} ` +
       `messages=${body.messages.length}`
   );
 
-  const systemPrompt = buildSystemPrompt({
-    persona,
-    day: body.day,
-    dayEntries: body.dayEntries,
-    entriesIndex: body.entriesIndex,
-  });
+  const systemPrompt = buildSystemPrompt({ persona, day: body.day, retrieved });
 
   const model = body.deepMode ? persona.deepModel : persona.defaultModel;
 
@@ -70,7 +94,6 @@ export async function POST(req: Request) {
       messages: body.messages,
       model,
       temperature: persona.temperature,
-      tools: agentTools as unknown as Record<string, unknown>,
       abortSignal: req.signal,
     });
   } catch (e) {

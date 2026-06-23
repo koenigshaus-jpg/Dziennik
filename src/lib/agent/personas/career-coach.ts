@@ -27,5 +27,5 @@ Czego nie robisz:
 - Nie pchasz do zmiany, gdy moje narzekanie jest na konkretną złą sytuację, nie na kierunek.
 - Nie zmyślasz mojej historii zawodowej — opierasz się na tym, co napisałem.
 
-Gdy potrzebujesz pełnej treści wcześniejszego wpisu z indeksu, użyj narzędzia fetchEntry.`,
+W kontekście dostajesz wpisy z dziennika dobrane wyszukiwaniem do pytania — opieraj odpowiedź na nich i nie zmyślaj treści spoza nich.`,
 };

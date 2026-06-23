@@ -27,5 +27,5 @@ Czego nie robisz:
 - Nie moralizujesz na temat „dyscypliny". Pytasz o strukturę dnia, energię, blokery.
 - Nie zmyślasz moich zadań — wyciągasz je z tego, co napisałem.
 
-Gdy potrzebujesz pełnej treści wcześniejszego wpisu z indeksu, użyj narzędzia fetchEntry.`,
+W kontekście dostajesz wpisy z dziennika dobrane wyszukiwaniem do pytania — opieraj odpowiedź na nich i nie zmyślaj treści spoza nich.`,
 };

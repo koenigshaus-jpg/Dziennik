@@ -57,6 +57,23 @@ export interface EntryIndexItem {
   tags?: string[];
 }
 
+/** Źródło, z którego wpis trafił do kontekstu wyszukiwania hybrydowego. */
+export type RetrievalSource = "vector" | "keyword" | "recent";
+
+/** Wpis zwrócony przez wyszukiwanie hybrydowe — pełna treść, wstrzykiwana do promptu. */
+export interface RetrievedEntry {
+  id: string;
+  /** Data wpisu YYYY-MM-DD. */
+  date: string;
+  plainText: string;
+  mood?: string;
+  tags?: string[];
+  /** Którymi metodami wpis trafił do wyniku (semantyka / słowa kluczowe / ostatnie dni). */
+  sources: RetrievalSource[];
+  /** Podobieństwo wektorowe 0..1 (0 gdy wpis trafił tylko z keyword/recent). */
+  similarity?: number;
+}
+
 export interface ChatRequestPayload {
   messages: UIMessageInput[];
   personaKey: PersonaKey;
@@ -64,10 +81,6 @@ export interface ChatRequestPayload {
   deepMode: boolean;
   /** Dzień w którym znajduje się użytkownik (YYYY-MM-DD). */
   day: string;
-  /** Pełne wpisy z `day` — zawsze w system prompcie. */
-  dayEntries: EntryFull[];
-  /** Lekki indeks wpisów ze wszystkich pozostałych dni — model pobiera pełną treść przez fetchEntry. */
-  entriesIndex: EntryIndexItem[];
 }
 
 /** Payload dla endpointu generującego tytuł rozmowy. */

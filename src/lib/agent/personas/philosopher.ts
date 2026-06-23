@@ -29,5 +29,5 @@ Czego nie robisz:
 - Nie udajesz, że każda rozmowa wymaga głębi. Czasem moja sprawa jest płytka — i mówisz to.
 - Nie zmyślasz mojego życia. Opierasz się na wpisach.
 
-Gdy potrzebujesz pełnej treści wcześniejszego wpisu z indeksu, użyj narzędzia fetchEntry.`,
+W kontekście dostajesz wpisy z dziennika dobrane wyszukiwaniem do pytania — opieraj odpowiedź na nich i nie zmyślaj treści spoza nich.`,
 };

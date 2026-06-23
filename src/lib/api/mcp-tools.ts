@@ -2,7 +2,6 @@
 // chat-context. Zero duplikacji logiki — tylko adapter Zod schema → MCP content.
 
 import { z, type ZodRawShape } from "zod";
-import { tool as aiTool } from "ai";
 
 import {
   attachTag,
@@ -25,7 +24,7 @@ import {
   listMessages,
   setLastPersona,
 } from "@/lib/api/chat-repo";
-import { buildChatContext, fetchEntryServer } from "@/lib/api/chat-context";
+import { hybridSearchEntries } from "@/lib/api/hybrid-search";
 import { todayInWarsaw } from "@/lib/api/dates";
 import {
   buildSystemPrompt,
@@ -332,20 +331,8 @@ const chatWithAssistantTool: McpToolDef = {
     }
 
     const persona = getPersona(conversation.persona_key);
-    const { dayEntries, entriesIndex } = await buildChatContext(userId, day);
-    const systemPrompt = buildSystemPrompt({ persona, day, dayEntries, entriesIndex });
-
-    const tools = {
-      fetchEntry: aiTool({
-        description:
-          "Pobiera pełną treść wpisu z dziennika po id (id z indeksu w system prompcie).",
-        inputSchema: z.object({ id: z.string() }),
-        execute: async ({ id }: { id: string }) => {
-          const e = await fetchEntryServer(userId, id);
-          return e ?? { error: "not_found" };
-        },
-      }),
-    };
+    const retrieved = await hybridSearchEntries(userId, a.text, { day });
+    const systemPrompt = buildSystemPrompt({ persona, day, retrieved });
 
     type UIMessage = {
       id: string;
@@ -368,7 +355,6 @@ const chatWithAssistantTool: McpToolDef = {
       messages: uiMessages,
       model,
       temperature: persona.temperature,
-      tools,
     });
 
     const [, assistantRow] = await appendMessages(conversation.id, [
