@@ -79,7 +79,7 @@ export function PhotoFab({ selectedDay }: Props) {
         disabled={creating}
         aria-label="Dodaj wpis ze zdjęciem"
         className={cn(
-          "lg:hidden fixed right-[5.25rem] bottom-[calc(var(--composer-h,5rem)+0.75rem)] z-40",
+          "lg:hidden fixed left-4 bottom-[calc(var(--composer-h,5rem)+0.75rem)] z-40",
           "inline-flex h-14 w-14 items-center justify-center rounded-full",
           "shadow-[var(--elevation-2)] transition-transform",
           "bg-background text-foreground border border-border hover:scale-105 active:scale-95",

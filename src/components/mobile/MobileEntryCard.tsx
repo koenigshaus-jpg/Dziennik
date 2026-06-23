@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Image as ImageIcon, Mic } from "lucide-react";
+import { Mic } from "lucide-react";
 import type { ClientEntry } from "@/lib/db-supabase";
 import { formatTimePL, toIsoLocalDate } from "@/lib/dates";
 import { snippet } from "@/lib/text";
@@ -32,6 +32,25 @@ export function MobileEntryCard({ entry, first = false }: Props) {
         !first && "border-t border-border"
       )}
     >
+      {images.length > 0 && (
+        <div className="flex flex-col gap-2 mb-2">
+          {images.map((m) => (
+            <div
+              key={m.id}
+              className="w-full overflow-hidden rounded-xl border border-border bg-foreground/[0.04]"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={m.path}
+                alt=""
+                loading="lazy"
+                className="w-full max-h-[70vh] object-contain"
+              />
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="flex items-start gap-3">
         <div className="flex-1 min-w-0 text-base font-medium leading-6 text-foreground/90">
           {entry.contentText && (
@@ -46,7 +65,6 @@ export function MobileEntryCard({ entry, first = false }: Props) {
       </div>
 
       {(moods.length > 0 ||
-        images.length > 0 ||
         audios.length > 0 ||
         entry.tags.length > 0 ||
         personas.length > 0) && (
@@ -58,12 +76,6 @@ export function MobileEntryCard({ entry, first = false }: Props) {
                   {m.emoji}
                 </span>
               ))}
-            </span>
-          )}
-          {images.length > 0 && (
-            <span className="inline-flex items-center gap-1">
-              <ImageIcon className="h-3.5 w-3.5" />
-              {images.length}
             </span>
           )}
           {audios.length > 0 && (

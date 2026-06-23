@@ -444,7 +444,7 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
         renderMicButton(
           "lg:hidden absolute -top-12 right-4"
         )}
-      {/* Mobile: „Dodaj zdjęcie" po lewej od mikrofonu, w jego rozmiarze */}
+      {/* Mobile: „Dodaj zdjęcie" po lewej stronie, mikrofon po prawej */}
       {bare && (
         <button
           type="button"
@@ -452,7 +452,7 @@ export const EntryForm = forwardRef<EntryFormHandle, Props>(function EntryForm(
           disabled={uploadingImage}
           aria-label="Dodaj zdjęcie"
           className={cn(
-            "lg:hidden absolute -top-12 right-16 z-20",
+            "lg:hidden absolute -top-12 left-4 z-20",
             "inline-flex items-center justify-center gap-1.5 h-10 px-3 rounded-full",
             "border border-border bg-background text-muted text-sm transition-colors",
             "shadow-[var(--elevation-2)] hover:text-foreground hover:bg-foreground/5",

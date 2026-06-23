@@ -5,6 +5,7 @@ import "./globals.css";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AgentSheetProvider } from "@/components/agent/AgentSheetProvider";
+import { GalleryDialogProvider } from "@/components/media/GalleryDialogProvider";
 
 const inter = Inter({
   subsets: ["latin", "latin-ext"],
@@ -54,8 +55,10 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <ThemeProvider>
           <AgentSheetProvider>
-            {children}
-            <Toaster position="top-center" richColors />
+            <GalleryDialogProvider>
+              {children}
+              <Toaster position="top-center" richColors />
+            </GalleryDialogProvider>
           </AgentSheetProvider>
         </ThemeProvider>
       </body>

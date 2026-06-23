@@ -22,6 +22,14 @@ export interface ClientEntry {
   media: ClientMedia[];
 }
 
+export interface GalleryImage {
+  mediaId: string;
+  entryId: string;
+  path: string; // signed URL (TTL 1h)
+  mime: string;
+  createdAt: number; // created_at wpisu (do sortowania / grupowania)
+}
+
 export type EntriesChangedKind = "create" | "update" | "delete";
 export interface EntriesChangedDetail {
   id: string;
@@ -399,6 +407,50 @@ export async function listEntries(opts?: {
   const out: ClientEntry[] = [];
   for (const r of rows) out.push(await mapEntry(r));
   return out;
+}
+
+/** Wszystkie zdjęcia użytkownika (RLS per user) posortowane malejąco po dacie
+ *  wpisu. Wszystkie ścieżki podpisywane jednym batchem (jak signMedia). */
+export async function listAllImages(): Promise<GalleryImage[]> {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("media")
+    .select("id,entry_id,path,mime,kind,entries(created_at)")
+    .eq("kind", "image");
+  if (error) throw error;
+
+  type Row = {
+    id: string;
+    entry_id: string;
+    path: string;
+    mime: string;
+    entries: { created_at: string } | { created_at: string }[] | null;
+  };
+  const rows = (data ?? []) as unknown as Row[];
+  if (rows.length === 0) return [];
+
+  const createdAtOf = (r: Row): number => {
+    const e = Array.isArray(r.entries) ? r.entries[0] : r.entries;
+    return e ? new Date(e.created_at).getTime() : 0;
+  };
+
+  const { data: signed, error: signErr } = await supabase.storage
+    .from("media")
+    .createSignedUrls(
+      rows.map((r) => r.path),
+      SIGNED_URL_TTL
+    );
+  if (signErr) throw signErr;
+
+  return rows
+    .map((r, i) => ({
+      mediaId: r.id,
+      entryId: r.entry_id,
+      path: signed?.[i]?.signedUrl ?? "",
+      mime: r.mime,
+      createdAt: createdAtOf(r),
+    }))
+    .sort((a, b) => b.createdAt - a.createdAt);
 }
 
 export async function listAllTagsWithCount(): Promise<

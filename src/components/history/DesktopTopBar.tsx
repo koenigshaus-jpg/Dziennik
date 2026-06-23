@@ -4,6 +4,7 @@ import * as React from "react";
 import {
   CalendarDays,
   Filter,
+  Images,
   Loader2,
   Plus,
   Search,
@@ -14,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DesktopCalendarPopover } from "./DesktopCalendarPopover";
 import { HamburgerDrawer } from "@/components/mobile/HamburgerDrawer";
+import { useGallery } from "@/components/media/GalleryDialogProvider";
 
 interface Props {
   todayIso: string;
@@ -50,6 +52,7 @@ export function DesktopTopBar({
 }: Props) {
   const [calendarOpen, setCalendarOpen] = React.useState(false);
   const [menuOpen, setMenuOpen] = React.useState(false);
+  const { openGallery } = useGallery();
   const isToday = selectedDay === todayIso;
 
   return (
@@ -94,6 +97,14 @@ export function DesktopTopBar({
                 entryCountsByDay={entryCountsByDay}
               />
             </div>
+            <button
+              type="button"
+              onClick={openGallery}
+              aria-label="Galeria"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full text-muted hover:bg-foreground/5 hover:text-foreground transition-colors"
+            >
+              <Images className="h-5 w-5" />
+            </button>
             {!isToday && (
               <button
                 type="button"

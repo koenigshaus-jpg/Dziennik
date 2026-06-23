@@ -4,7 +4,9 @@ import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import * as LucideIcons from "lucide-react";
 import Link from "next/link";
-import { X, Settings, LogOut, Loader2, Tag as TagIcon, BookOpen } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { X, Settings, LogOut, Loader2, Tag as TagIcon, BookOpen, Images } from "lucide-react";
+import { useGallery } from "@/components/media/GalleryDialogProvider";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
@@ -40,6 +42,8 @@ export function HamburgerDrawer({ open, onOpenChange }: Props) {
   const [loggingOut, setLoggingOut] = React.useState(false);
   const { conversations } = useConversationsMeta();
   const { openSheet } = useAgentSheet();
+  const { openGallery } = useGallery();
+  const router = useRouter();
 
   const recent = conversations.slice(0, 6);
 
@@ -154,6 +158,27 @@ export function HamburgerDrawer({ open, onOpenChange }: Props) {
             {/* Nawigacja */}
             <nav className="px-2">
               <ul className="flex flex-col gap-1">
+                <li>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onOpenChange(false);
+                      // Desktop → duży popup; mobile → pełna strona.
+                      if (
+                        typeof window !== "undefined" &&
+                        window.matchMedia("(min-width: 1024px)").matches
+                      ) {
+                        openGallery();
+                      } else {
+                        router.push("/galeria");
+                      }
+                    }}
+                    className="w-full flex items-center gap-3 px-3 h-11 rounded-md text-sm hover:bg-foreground/5"
+                  >
+                    <Images className="h-4 w-4" />
+                    Galeria
+                  </button>
+                </li>
                 <li>
                   <Link
                     href="/ustawienia"
