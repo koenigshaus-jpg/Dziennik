@@ -19,14 +19,17 @@ There are no tests. Type errors surface at build time (`next build`). For UI ver
 
 ## Architecture
 
-### Two parallel persistence paths
+### Persistence (Supabase)
 
-Persistence has been migrated from server to client. **Both layers exist in the codebase but the app currently reads/writes through the client IndexedDB layer.** Don't mix them in a single feature without intent.
+Wpisy/tagi/media żyją w Supabase. **Aktywną warstwą danych jest [src/lib/db-supabase.ts](src/lib/db-supabase.ts)** — całe CRUD UI (`createEntry`/`updateEntry`/`deleteEntry`/`getEntry`/`listEntries` + zarządzanie tagami) idzie przez ten plik. Klient przeglądarkowy: [src/lib/supabase/client.ts](src/lib/supabase/client.ts) (`@supabase/ssr`, env `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`). Każde zapytanie jest RLS-owane per `user_id` zalogowanego użytkownika. Mutacje dispatchują `window` `CustomEvent("entries-changed", { detail: { id, kind } })`, na który nasłuchują inne panele (plus refetch na `window` `focus`).
 
-- **Client (active)**: `src/lib/db-client.ts` — IndexedDB store named `dziennik`. All CRUD goes through `createEntry`/`updateEntry`/`deleteEntry`/`getEntry`/`listEntries`. Mutations dispatch a `window` `CustomEvent("entries-changed", { detail: { id, kind } })` which other panes listen to for live sync (also refetch on `window` `focus`).
-- **Server (legacy)**: `src/lib/entries.ts` + `src/db/` (Drizzle + libsql) + `src/app/api/entries/**`. Still wired but not exercised by the UI. The DB backend resolves by env in `src/db/index.ts`: Turso → `/tmp` on Vercel (ephemeral) → local `./data/`. Server-side media storage in `src/lib/storage.ts` has three modes: Vercel Blob → data URI → local FS.
+- **Tabele**: `entries`, `tags`, `entry_tags`, `media`. Schema selecta w `ENTRY_SELECT` (db-supabase.ts).
+- **Media w Storage**: bucket `media` (prywatny). Patrz sekcja „Media handling" niżej.
+- **Embeddings / wyszukiwanie**: `entry_embeddings` + RPC hybrydowy (`supabase/migrations/`, `src/lib/api/embeddings.ts`, `src/lib/api/hybrid-search.ts`). Edge Function `supabase/functions/embed-entry`.
 
-Wspólny opener IDB siedzi w [src/lib/idb.ts](src/lib/idb.ts) (`DB_NAME = "dziennik"`, `DB_VERSION = 2`). Definiuje oba store'y w jednym idempotentnym handlerze `onupgradeneeded` — dodając nowy store, podbij `DB_VERSION` i dorzuć tam guarded `createObjectStore`. Drugi store, `conversations`, jest zarządzany przez `src/lib/conversations-client.ts` (sekcja Agent AI poniżej).
+**Warstwy legacy (nieaktywne, nie używać w nowych feature'ach):**
+- IndexedDB `src/lib/db-client.ts` — już NIE obsługuje wpisów. Zostaje tylko jako baza pod store `conversations` (Agent AI); jedyny importer to `src/lib/conversations-client.ts`. Wspólny opener IDB: [src/lib/idb.ts](src/lib/idb.ts) (`DB_NAME = "dziennik"`, `DB_VERSION = 2`) — dodając store podbij `DB_VERSION` i dorzuć guarded `createObjectStore`.
+- Server/Drizzle: `src/lib/entries.ts` + `src/db/` + `src/app/api/entries/**` oraz `src/lib/storage.ts` — pozostałości po starym backendzie, nieexercise'owane przez UI.
 
 ### Agent AI
 
@@ -78,9 +81,14 @@ Conventions in non-`Button` markup:
 
 ### Media handling
 
-- Image compression happens client-side in `src/lib/clientImage.ts` before storing.
-- Images and audio in client mode are stored as `data:` URIs inside the IndexedDB entry's `media[]`.
+Zdjęcia trafiają do **Supabase Storage** (bucket `media`, prywatny), nie do IndexedDB ani jako `data:` URI w bazie.
+
+- **Upload**: kompresja klientowa w [src/lib/clientImage.ts](src/lib/clientImage.ts) → `data:` URI w stanie formularza → przy zapisie `persistMedia`/`uploadMediaItem` (w [src/lib/db-supabase.ts](src/lib/db-supabase.ts)) wgrywa blob do bucketu `media` pod kluczem `${userId}/${entryId}/${mediaId}.${ext}` i wstawia wiersz do tabeli `media`. Usunięcie zdjęcia → `deleteStorageKeys` + delete wiersza; `deleteEntry` sprząta wszystkie obiekty wpisu.
+- **Odczyt**: `signMedia` zamienia `path` (storage key) na signed URL (TTL 1h) — `ClientMedia.path` w UI to signed URL.
+- **Dodawanie zdjęć (punkty wejścia)**: mobile kalendarz — [PhotoFab](src/components/mobile/PhotoFab.tsx) (FAB obok mikrofonu: picker → kompresja → nowy wpis ze zdjęciami → `/wpis/[id]`); mobile widok wpisu — pill „Dodaj zdjęcie" po lewej od mikrofonu STT; desktop — pozycja „Dodaj zdjęcie" w menu „Dodaj element" ([EntryEditor.tsx](src/components/entry/EntryEditor.tsx)) + drag&drop na edytor. Logika dodawania (`handleImageFiles`, `openImagePicker`) siedzi w [EntryForm.tsx](src/components/entry/EntryForm.tsx).
+- **Render**: miniatury zdjęć są pokazywane **nad** treścią wpisu (`MediaThumbs` nad `<Editor>` w EntryForm). Wpis może mieć samo zdjęcie, sam tekst albo oba.
 - `MediaThumbs` ([src/components/entry/MediaThumbs.tsx](src/components/entry/MediaThumbs.tsx)) owns its lightbox state (index-based, keyboard `←`/`→`/`Esc`, prev/next arrows shown when >1 image, counter at bottom). Thumbnails use `object-contain` so non-square images aren't cropped.
+- **Audio**: dodawanie/nagrywanie audio jest wyłączone (narazie). Mikrofon w edytorze to wyłącznie dyktowanie STT ([src/lib/useStt.ts](src/lib/useStt.ts), `renderMicButton` w EntryForm). Wyświetlanie istniejących nagrań (`AudioList`) zostaje dla starych wpisów, ale nie ma UI do nagrywania nowych.
 
 ## Conventions
 
