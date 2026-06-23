@@ -1,12 +1,24 @@
 import { NextResponse } from "next/server";
+import { createSupabaseRouteHandlerClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const OPENAI_URL = "https://api.openai.com/v1/audio/transcriptions";
 const MODEL = "gpt-4o-mini-transcribe";
+// Limit rozmiaru audio (chroni budżet OpenAI przed nadużyciem otwartego endpointu).
+const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
 
 export async function POST(req: Request) {
+  // Wymagaj zalogowanej sesji Supabase — endpoint woła płatne API OpenAI.
+  const supabase = await createSupabaseRouteHandlerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Wymagane logowanie." }, { status: 401 });
+  }
+
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
@@ -25,6 +37,12 @@ export async function POST(req: Request) {
   const file = inForm.get("file");
   if (!(file instanceof Blob)) {
     return NextResponse.json({ error: "Brak pliku audio." }, { status: 400 });
+  }
+  if (file.size > MAX_AUDIO_BYTES) {
+    return NextResponse.json(
+      { error: "Plik audio za duży (max 25 MB)." },
+      { status: 413 }
+    );
   }
 
   const language = (inForm.get("language") as string | null) || "pl";

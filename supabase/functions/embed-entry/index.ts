@@ -66,8 +66,15 @@ async function embed(inputs: string[]): Promise<number[][]> {
   return json.data.map((d: { embedding: number[] }) => d.embedding);
 }
 
+// Współdzielony sekret z triggerem (pg_net dosyła nagłówek `x-embed-secret`).
+// Egzekwowany tylko gdy skonfigurowany — bez niego zachowanie jak dotąd.
+const WEBHOOK_SECRET = Deno.env.get("EMBED_WEBHOOK_SECRET");
+
 Deno.serve(async (req) => {
   try {
+    if (WEBHOOK_SECRET && req.headers.get("x-embed-secret") !== WEBHOOK_SECRET) {
+      return new Response("forbidden", { status: 403 });
+    }
     const payload = (await req.json()) as WebhookPayload;
     const rec = payload.record;
     if (!rec || payload.type === "DELETE") {
