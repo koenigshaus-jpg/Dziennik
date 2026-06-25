@@ -24,6 +24,7 @@ const PUBLIC_PATHS = [
   "/oauth/authorize/decision",                   // POST decision (own auth check)
   "/api/mcp",                                    // MCP HTTP transport (own withMcpAuth)
   "/api/stripe/webhook",                         // webhook Stripe — własna autoryzacja (podpis)
+  "/api/woo/webhook",                            // webhook WooCommerce — własna autoryzacja (podpis HMAC)
   // /oauth/authorize zostaje POD loginem — wymaga sesji Supabase do consent
 ];
 

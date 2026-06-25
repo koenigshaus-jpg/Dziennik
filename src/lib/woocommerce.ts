@@ -146,6 +146,22 @@ export async function getProductBySlug(slug: string): Promise<WooProduct | null>
   return rows[0] ?? null;
 }
 
+/** Produkt po ID. */
+export function getProductById(id: number): Promise<WooProduct> {
+  return wc<WooProduct>(`products/${id}`);
+}
+
+/** Aktualizuje pola własne (meta_data) produktu. */
+export async function updateProductMeta(
+  id: number,
+  meta: { key: string; value: string }[],
+): Promise<void> {
+  await wc(`products/${id}`, {
+    method: "PUT",
+    body: JSON.stringify({ meta_data: meta }),
+  });
+}
+
 // --- Persony jako produkty (konsultanci) ---
 // Każdy konsultant ma produkt z polami własnymi persona_* (patrz scripts/seed-shop.ts).
 // To pozwala edytować prompt w panelu WooCommerce, a aplikacja czyta go stąd.
