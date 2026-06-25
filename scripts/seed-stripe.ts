@@ -89,7 +89,12 @@ async function main() {
       await stripe.prices.update(existingPriceId, { active: false }); // dezaktywuj starą
       await wc(`products/${p.id}`, {
         method: "PUT",
-        body: JSON.stringify({ meta_data: [{ key: "stripe_price_id", value: price.id }] }),
+        body: JSON.stringify({
+          meta_data: [
+            { key: "stripe_price_id", value: price.id },
+            { key: "stripe_synced_amount", value: String(amount) },
+          ],
+        }),
       });
       console.log(
         `↻ ${sku} — zmiana ceny ${(cur.unit_amount ?? 0) / 100}→${amount / 100} zł → ${price.id} (stara dezaktywowana)`,
@@ -114,6 +119,7 @@ async function main() {
         meta_data: [
           { key: "stripe_product_id", value: product.id },
           { key: "stripe_price_id", value: price.id },
+          { key: "stripe_synced_amount", value: String(amount) },
         ],
       }),
     });

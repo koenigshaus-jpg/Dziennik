@@ -22,12 +22,24 @@ export async function syncProductPriceById(productId: number): Promise<string> {
   const amount = Math.round(Number(p.price) * 100); // grosze
   if (!amount || amount <= 0) return "free";
 
-  const stripe = getStripe();
   const existingPriceId = getMeta(p, "stripe_price_id");
+
+  // Krótkie spięcie: jeśli ta kwota jest już zsynchronizowana, nic nie rób — bez
+  // wywołań Stripe. KLUCZOWE: nasz własny zapis meta też odpala webhook
+  // product.updated; ten guard sprawia, że taki re-trigger natychmiast wygasa
+  // (zamiast nakręcać kaskadę tworzenia kolejnych cen).
+  const syncedAmount = Number(getMeta(p, "stripe_synced_amount"));
+  if (existingPriceId && syncedAmount === amount) return "unchanged";
+
+  const stripe = getStripe();
 
   if (existingPriceId) {
     const cur = await stripe.prices.retrieve(existingPriceId);
-    if (cur.unit_amount === amount && cur.currency === "pln") return "unchanged";
+    if (cur.unit_amount === amount && cur.currency === "pln") {
+      // Cena się zgadza, brakuje tylko znacznika — dopisz, żeby uciszyć webhooki.
+      await updateProductMeta(p.id, [{ key: "stripe_synced_amount", value: String(amount) }]);
+      return "unchanged";
+    }
     const productSid = getMeta(p, "stripe_product_id") ?? (cur.product as string);
     const price = await stripe.prices.create({
       product: productSid,
@@ -37,7 +49,10 @@ export async function syncProductPriceById(productId: number): Promise<string> {
       metadata: { sku },
     });
     await stripe.prices.update(existingPriceId, { active: false });
-    await updateProductMeta(p.id, [{ key: "stripe_price_id", value: price.id }]);
+    await updateProductMeta(p.id, [
+      { key: "stripe_price_id", value: price.id },
+      { key: "stripe_synced_amount", value: String(amount) },
+    ]);
     return `updated:${price.id}`;
   }
 
@@ -52,6 +67,7 @@ export async function syncProductPriceById(productId: number): Promise<string> {
   await updateProductMeta(p.id, [
     { key: "stripe_product_id", value: product.id },
     { key: "stripe_price_id", value: price.id },
+    { key: "stripe_synced_amount", value: String(amount) },
   ]);
   return `created:${price.id}`;
 }
