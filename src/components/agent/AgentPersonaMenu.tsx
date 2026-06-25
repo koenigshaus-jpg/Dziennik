@@ -1,17 +1,17 @@
 "use client";
 
 import * as React from "react";
-import { ChevronDown, Check } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import * as LucideIcons from "lucide-react";
 
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
-  DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { PERSONA_ORDER, PERSONAS, getPersona } from "@/lib/agent/personas";
+import { PersonaMenuList } from "@/components/agent/PersonaMenuList";
+import { getPersona } from "@/lib/agent/personas";
 import type { PersonaKey } from "@/lib/agent/types";
 
 interface Props {
@@ -53,29 +53,7 @@ export function AgentPersonaMenu({ personaKey, onSelect }: Props) {
         side="bottom"
         className="w-[300px] max-h-[60vh] overflow-y-auto"
       >
-        {PERSONA_ORDER.map((key) => {
-          const p = PERSONAS[key];
-          const PIcon = getIcon(p.icon);
-          const isActive = key === personaKey;
-          return (
-            <DropdownMenuItem
-              key={key}
-              onSelect={() => onSelect(key)}
-              className="flex flex-col items-start gap-0.5 py-2.5"
-            >
-              <div className="flex w-full items-center gap-2">
-                <PIcon className="h-4 w-4 text-foreground/80" />
-                <span className="text-sm font-medium">{p.name}</span>
-                {isActive && (
-                  <Check className="ml-auto h-3.5 w-3.5 text-foreground/70" />
-                )}
-              </div>
-              <p className="text-[11px] text-muted leading-snug pl-6">
-                {p.description}
-              </p>
-            </DropdownMenuItem>
-          );
-        })}
+        <PersonaMenuList activeKey={personaKey} onSelect={onSelect} />
       </DropdownMenuContent>
     </DropdownMenu>
   );

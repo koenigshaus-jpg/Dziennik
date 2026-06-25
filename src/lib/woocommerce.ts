@@ -72,6 +72,31 @@ export interface WooProduct {
   stock_status: "instock" | "outofstock" | "onbackorder";
   images: WooImage[];
   categories: { id: number; name: string; slug: string }[];
+  meta_data?: { key: string; value: string }[];
+}
+
+export function getMeta(p: WooProduct, key: string): string | undefined {
+  return p.meta_data?.find((m) => m.key === key)?.value || undefined;
+}
+
+/** Czy produkt to pakiet „wszystko" (meta bundle_sku=all). */
+export function isBundle(p: WooProduct): boolean {
+  return getMeta(p, "bundle_sku") === "all";
+}
+
+/** Czy produkt jest darmowy (cena 0). */
+export function isFreeProduct(p: WooProduct): boolean {
+  return p.price === "0" || Number(p.price) === 0;
+}
+
+/** Ikona persony (lucide) z meta, jeśli to produkt-konsultant. */
+export function getProductIcon(p: WooProduct): string | undefined {
+  return getMeta(p, "persona_icon");
+}
+
+/** SKU produktu do checkoutu: persona_key | "all" (pakiet) | null. */
+export function getProductSku(p: WooProduct): string | null {
+  return getMeta(p, "persona_key") ?? (isBundle(p) ? "all" : null);
 }
 
 // --- Operacje ---

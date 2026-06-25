@@ -71,7 +71,11 @@ Sklep w Dzienniku to **headless WooCommerce**: backend (WordPress+WooCommerce) n
 
 **Prompty z panelu WC.** Prompt persony edytuje się w WooCommerce (pole własne `persona_prompt`), a serwer czyta go runtime przez `getPersonaOverrides()` (woocommerce.ts) → `resolvePersona()` ([src/lib/agent/persona-source.ts](src/lib/agent/persona-source.ts), server-only), wpięte w **oba** route'y czatu: [api/chat](src/app/api/chat/route.ts) i [api/v1/chat](src/app/api/v1/chat/route.ts). Persona z kodu (`src/lib/agent/personas/`) jest fallbackiem, gdy WC niedostępne. Odczyt cache'owany 60 s — edycja w panelu pojawia się w czacie do ~minuty. **Klient (UI wyboru persony) nadal używa statycznego `PERSONAS`** — nadpisania z WC dotyczą tylko warstwy serwerowej budującej system prompt.
 
-> NIEZROBIONE (TODO): gating płatnych person (obecnie wszystkie person działają w czacie niezależnie od „zakupu"), flow zakupu + Stripe + webhook → entitlement w Supabase, przycisk „Kup" na kartach `/sklep`.
+**Uprawnienia (gating).** Płatne persony są zablokowane do czasu zakupu; darmowy Doradca (advisor) zawsze dostępny. Źródło prawdy: tabela `entitlements` (Supabase, migracja `0005`, RLS: user czyta swoje, zapis tylko service_role). `sku` = persona_key | `all` (pakiet = wszystkie obecne i przyszłe). Logika w [src/lib/agent/entitlements.ts](src/lib/agent/entitlements.ts) (`computeUnlocked`, `FREE_PERSONA_KEYS`, `BUNDLE_SKU`). Klient: hook [useEntitlements](src/lib/agent/use-entitlements.ts) (refetch na `focus` + event `entitlements-changed`). UI blokad: wspólny [PersonaMenuList](src/components/agent/PersonaMenuList.tsx) używany przez `ComposerBar` i `AgentPersonaMenu` — zablokowane = wyszarzone + kłódka + „Kup", na dole „Kup wszystkie". **Gating serwerowy** (UI jest obejściowalne!) w [api/chat](src/app/api/chat/route.ts) (402 `persona_locked`) i [api/v1/chat](src/app/api/v1/chat/route.ts) (admin read po `user_id`). Checkout: [checkout.ts](src/lib/agent/checkout.ts) → [api/checkout](src/app/api/checkout/route.ts).
+
+**Płatność = Stripe** (subskrypcja roczna), uprawnienia w Supabase. WooCommerce = katalog + admin promptów, NIE billing.
+
+> NIEZROBIONE (TODO): integracja Stripe — Products/Prices (roczne) per persona + pakiet `all`, implementacja `/api/checkout` (Stripe Checkout, mode subscription), webhook `/api/stripe/webhook` → upsert `entitlements`. Dopóki brak `STRIPE_SECRET_KEY`, `/api/checkout` zwraca 503 i UI pokazuje „wkrótce". Opcjonalnie: przyciski „Kup" na kartach `/sklep`.
 
 ### Routing
 

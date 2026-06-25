@@ -181,16 +181,6 @@ export function HamburgerDrawer({ open, onOpenChange }: Props) {
                 </li>
                 <li>
                   <Link
-                    href="/sklep"
-                    onClick={() => onOpenChange(false)}
-                    className="flex items-center gap-3 px-3 h-11 rounded-md text-sm hover:bg-foreground/5"
-                  >
-                    <ShoppingBag className="h-4 w-4" />
-                    Sklep
-                  </Link>
-                </li>
-                <li>
-                  <Link
                     href="/ustawienia"
                     onClick={() => onOpenChange(false)}
                     className="flex items-center gap-3 px-3 h-11 rounded-md text-sm hover:bg-foreground/5"
@@ -240,6 +230,18 @@ export function HamburgerDrawer({ open, onOpenChange }: Props) {
             <div className="px-3 pb-4 mt-2">
               <ThemeSwitcher embedded />
             </div>
+          </div>
+
+          {/* Sklep — przypięty do dolnej krawędzi, oddzielony separatorem */}
+          <div className="border-t border-border p-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)]">
+            <Link
+              href="/sklep"
+              onClick={() => onOpenChange(false)}
+              className="flex items-center gap-3 px-3 h-11 rounded-md text-sm hover:bg-foreground/5"
+            >
+              <ShoppingBag className="h-4 w-4" />
+              Sklep
+            </Link>
           </div>
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>

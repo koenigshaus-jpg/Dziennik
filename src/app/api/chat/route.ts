@@ -7,6 +7,11 @@ import {
   type PersonaKey,
 } from "@/lib/agent";
 import { resolvePersona } from "@/lib/agent/persona-source";
+import {
+  computeUnlocked,
+  isPersonaFree,
+  type EntitlementRow,
+} from "@/lib/agent/entitlements";
 import { createSupabaseRouteHandlerClient } from "@/lib/supabase/server";
 import { hybridSearchEntries } from "@/lib/api/hybrid-search";
 
@@ -72,7 +77,23 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Niezalogowany." }, { status: 401 });
   }
 
-  const persona = await resolvePersona(body.personaKey as PersonaKey);
+  // Gating: płatna persona wymaga aktywnego uprawnienia (entitlement). Darmowe
+  // persony przechodzą bez zapytania. Chroni przed obejściem blokady w UI.
+  const personaKey = body.personaKey as PersonaKey;
+  if (!isPersonaFree(personaKey)) {
+    const { data: ents } = await supabase
+      .from("entitlements")
+      .select("sku,status,current_period_end");
+    const { unlocked } = computeUnlocked((ents ?? []) as EntitlementRow[]);
+    if (!unlocked.has(personaKey)) {
+      return NextResponse.json(
+        { error: "persona_locked", personaKey },
+        { status: 402 },
+      );
+    }
+  }
+
+  const persona = await resolvePersona(personaKey);
 
   // Retrieval: hybrydowe wyszukiwanie wpisów pod ostatnie pytanie użytkownika.
   const query = lastUserText(body.messages);

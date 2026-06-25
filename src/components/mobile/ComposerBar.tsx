@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Mic, Send, Loader2, Square, Check } from "lucide-react";
+import { Mic, Send, Loader2, Square } from "lucide-react";
 import * as LucideIcons from "lucide-react";
 import { useStt } from "@/lib/useStt";
 import { cn } from "@/lib/utils";
@@ -10,9 +10,9 @@ import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
-  DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
-import { PERSONA_ORDER, PERSONAS, getPersona } from "@/lib/agent/personas";
+import { PersonaMenuList } from "@/components/agent/PersonaMenuList";
+import { getPersona } from "@/lib/agent/personas";
 import {
   getDefaultPersona,
   setDefaultPersona,
@@ -229,29 +229,10 @@ export const ComposerBar = React.forwardRef<ComposerBarHandle, Props>(
                 side="top"
                 className="w-[280px] max-h-[60vh] overflow-y-auto"
               >
-                {PERSONA_ORDER.map((key) => {
-                  const p = PERSONAS[key];
-                  const PIcon = getLucideIcon(p.icon);
-                  const isActive = key === personaKey;
-                  return (
-                    <DropdownMenuItem
-                      key={key}
-                      onSelect={() => handleSelectPersona(key)}
-                      className="flex flex-col items-start gap-0.5 py-2.5"
-                    >
-                      <div className="flex w-full items-center gap-2">
-                        <PIcon className="h-4 w-4 text-foreground/80" />
-                        <span className="text-sm font-medium">{p.name}</span>
-                        {isActive && (
-                          <Check className="ml-auto h-3.5 w-3.5 text-foreground/70" />
-                        )}
-                      </div>
-                      <p className="text-[11px] text-muted leading-snug pl-6">
-                        {p.description}
-                      </p>
-                    </DropdownMenuItem>
-                  );
-                })}
+                <PersonaMenuList
+                  activeKey={personaKey}
+                  onSelect={handleSelectPersona}
+                />
               </DropdownMenuContent>
             </DropdownMenu>
 

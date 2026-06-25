@@ -19,6 +19,13 @@ import {
   PERSONA_ORDER,
 } from "@/lib/agent";
 import { resolvePersona } from "@/lib/agent/persona-source";
+import {
+  computeUnlocked,
+  isPersonaFree,
+  type EntitlementRow,
+} from "@/lib/agent/entitlements";
+import type { PersonaKey } from "@/lib/agent/types";
+import { getSupabaseAdmin } from "@/lib/api/supabase-admin";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -56,6 +63,20 @@ export const POST = withApiHandler(async (req, { user }) => {
       throw new ApiError("unknown_persona_key", 400, { allowed: PERSONA_ORDER });
     }
     conversation = await createConversation(user.userId, personaKey);
+  }
+
+  // Gating: płatna persona wymaga aktywnego uprawnienia (jak w /api/chat).
+  if (!isPersonaFree(conversation.persona_key as PersonaKey)) {
+    const { data: ents } = await getSupabaseAdmin()
+      .from("entitlements")
+      .select("sku,status,current_period_end")
+      .eq("user_id", user.userId);
+    const { unlocked } = computeUnlocked((ents ?? []) as EntitlementRow[]);
+    if (!unlocked.has(conversation.persona_key as PersonaKey)) {
+      throw new ApiError("persona_locked", 402, {
+        persona_key: conversation.persona_key,
+      });
+    }
   }
 
   const persona = await resolvePersona(conversation.persona_key);
