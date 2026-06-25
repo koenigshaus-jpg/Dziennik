@@ -43,11 +43,27 @@ Model: **Stripe Checkout (subscription, roczna)** + webhook → upsert do `entit
 
 ### Jak zmienić cenę produktu
 Model: **Stripe = źródło prawdy ceny przy płatności, WooCommerce = wyświetlanie**.
-1. W panelu WooCommerce: *Produkty → [produkt] → Cena (regular_price)* — ustaw nową kwotę.
-2. Uruchom `npx tsx scripts/seed-stripe.ts`. Skrypt porówna cenę WC z aktualną ceną Stripe;
-   jeśli się różni — utworzy NOWĄ cenę Stripe (ceny są niezmienne), dezaktywuje starą i
-   podmieni `stripe_price_id` w meta WC. Etykieta w aplikacji (z WC) i kwota pobierana
-   (z nowego Stripe Price) są od tej chwili zgodne.
+
+**Sposób 1 (automatyczny):** w panelu WooCommerce *Produkty → [produkt] → Cena* — ustaw
+nową kwotę i zapisz. WooCommerce wyśle webhook `product.updated` → `/api/woo/webhook`
+(`src/lib/shop-sync.ts`) → tworzy nową cenę Stripe, dezaktywuje starą, podmienia
+`stripe_price_id`. Webhook WC w sklepie: utworzony przez API (topic `product.updated`,
+delivery → prod, sekret = `WC_WEBHOOK_SECRET`).
+
+⚠️ **NIE jest natychmiastowy** — WooCommerce dostarcza webhooki asynchronicznie przez
+Action Scheduler / wp-cron. Na cichym serwisie wp-cron odpala się rzadko, więc sync może
+przyjść po sekundach lub minutach. Dla pewności/szybkości można:
+- ustawić systemowy cron na hostingu (DirectAdmin → Cron Jobs) hitujący `wp-cron.php` co minutę
+  (+ `define('DISABLE_WP_CRON', true)` w `wp-config.php`), albo
+- użyć Sposobu 2.
+
+**Sposób 2 (natychmiastowy, ręczny):** `npx tsx scripts/seed-stripe.ts` — synchronizuje od
+ręki (porównuje ceny WC↔Stripe, tworzy/podmienia gdy różne).
+
+Anti-pętla: zapis `stripe_price_id`/`stripe_synced_amount` przez handler też odpala
+`product.updated`; meta `stripe_synced_amount` powoduje, że taki re-trigger natychmiast
+wygasa (handler kończy bez tworzenia cen).
+
 Uwaga: zmiana ceny nie wpływa na istniejące aktywne subskrypcje (rozliczają się po cenie
 z momentu zakupu) — dotyczy nowych zakupów.
 - `getStripePriceMap()` (woocommerce.ts) — mapa SKU → price ID z meta WC.
