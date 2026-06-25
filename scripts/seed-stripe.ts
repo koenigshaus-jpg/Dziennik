@@ -70,60 +70,54 @@ async function main() {
       console.log(`• ${sku} — darmowy/0, pomijam`);
       continue;
     }
-    const existingPriceId = metaVal(p, "stripe_price_id");
-    if (existingPriceId) {
-      // Synchronizacja: porównaj cenę WC z aktualną ceną Stripe.
-      const cur = await stripe.prices.retrieve(existingPriceId);
-      if (cur.unit_amount === amount && cur.currency === "pln") {
-        console.log(`• ${sku} — cena bez zmian (${amount / 100} zł), pomijam`);
-        continue;
+    // Produkt Stripe dla SKU (z meta lub utworzony).
+    let productSid = metaVal(p, "stripe_product_id");
+    if (productSid) {
+      try {
+        await stripe.products.retrieve(productSid);
+      } catch {
+        productSid = undefined;
       }
-      const productId = metaVal(p, "stripe_product_id") ?? (cur.product as string);
-      const price = await stripe.prices.create({
-        product: productId,
+    }
+    if (!productSid) {
+      productSid = (await stripe.products.create({ name: p.name, metadata: { sku } })).id;
+    }
+
+    // Reuse istniejącej aktywnej ceny o właściwej kwocie, inaczej utwórz jedną.
+    const active = (await stripe.prices.list({ product: productSid, active: true, limit: 100 })).data;
+    const match = active.find(
+      (pr) => pr.unit_amount === amount && pr.currency === "pln" && pr.recurring?.interval === "year",
+    );
+    const target =
+      match ??
+      (await stripe.prices.create({
+        product: productSid,
         unit_amount: amount,
         currency: "pln",
         recurring: { interval: "year" },
         metadata: { sku },
-      });
-      await stripe.prices.update(existingPriceId, { active: false }); // dezaktywuj starą
+      }));
+
+    // Jedna aktywna cena na produkt — resztę dezaktywuj.
+    for (const pr of active) {
+      if (pr.id !== target.id) await stripe.prices.update(pr.id, { active: false });
+    }
+
+    // Meta tylko gdy się zmienia.
+    if (metaVal(p, "stripe_price_id") !== target.id || metaVal(p, "stripe_product_id") !== productSid) {
       await wc(`products/${p.id}`, {
         method: "PUT",
         body: JSON.stringify({
           meta_data: [
-            { key: "stripe_price_id", value: price.id },
-            { key: "stripe_synced_amount", value: String(amount) },
+            { key: "stripe_product_id", value: productSid },
+            { key: "stripe_price_id", value: target.id },
           ],
         }),
       });
-      console.log(
-        `↻ ${sku} — zmiana ceny ${(cur.unit_amount ?? 0) / 100}→${amount / 100} zł → ${price.id} (stara dezaktywowana)`,
-      );
-      continue;
+      console.log(`✓ ${sku} → ${target.id} (${amount / 100} zł/rok)${match ? " [reuse]" : " [new]"}`);
+    } else {
+      console.log(`• ${sku} — bez zmian (${amount / 100} zł)`);
     }
-
-    const product = await stripe.products.create({
-      name: p.name,
-      metadata: { sku },
-    });
-    const price = await stripe.prices.create({
-      product: product.id,
-      unit_amount: amount,
-      currency: "pln",
-      recurring: { interval: "year" },
-      metadata: { sku },
-    });
-    await wc(`products/${p.id}`, {
-      method: "PUT",
-      body: JSON.stringify({
-        meta_data: [
-          { key: "stripe_product_id", value: product.id },
-          { key: "stripe_price_id", value: price.id },
-          { key: "stripe_synced_amount", value: String(amount) },
-        ],
-      }),
-    });
-    console.log(`✓ ${sku} → ${product.id} / ${price.id} (${amount / 100} zł/rok)`);
   }
   console.log("Gotowe.");
 }

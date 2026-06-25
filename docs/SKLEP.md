@@ -60,9 +60,11 @@ przyjść po sekundach lub minutach. Dla pewności/szybkości można:
 **Sposób 2 (natychmiastowy, ręczny):** `npx tsx scripts/seed-stripe.ts` — synchronizuje od
 ręki (porównuje ceny WC↔Stripe, tworzy/podmienia gdy różne).
 
-Anti-pętla: zapis `stripe_price_id`/`stripe_synced_amount` przez handler też odpala
-`product.updated`; meta `stripe_synced_amount` powoduje, że taki re-trigger natychmiast
-wygasa (handler kończy bez tworzenia cen).
+Anti-pętla: zapis `stripe_price_id` przez handler też odpala `product.updated`. Handler
+jest na to odporny — (1) jeśli istnieje już aktywna cena o właściwej kwocie, używa jej
+zamiast tworzyć nową; (2) zapisuje meta do WC tylko gdy faktycznie się zmienia (więc
+re-trigger od własnego zapisu natychmiast wygasa); (3) trzyma jedną aktywną cenę na produkt
+(resztę dezaktywuje). Dzięki temu jedna zmiana ceny = jedna nowa cena, bez kaskady.
 
 Uwaga: zmiana ceny nie wpływa na istniejące aktywne subskrypcje (rozliczają się po cenie
 z momentu zakupu) — dotyczy nowych zakupów.

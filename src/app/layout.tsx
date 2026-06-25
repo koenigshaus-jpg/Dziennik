@@ -6,6 +6,7 @@ import { THEME_INIT_SCRIPT } from "@/lib/theme";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AgentSheetProvider } from "@/components/agent/AgentSheetProvider";
 import { GalleryDialogProvider } from "@/components/media/GalleryDialogProvider";
+import { SessionGuard } from "@/components/SessionGuard";
 
 const inter = Inter({
   subsets: ["latin", "latin-ext"],
@@ -54,6 +55,7 @@ export default function RootLayout({
       </head>
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <ThemeProvider>
+          <SessionGuard />
           <AgentSheetProvider>
             <GalleryDialogProvider>
               {children}

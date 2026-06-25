@@ -1,6 +1,12 @@
 // Synchronizacja ceny pojedynczego produktu WC → Stripe (server-only).
-// Używane przez webhook WooCommerce (/api/woo/webhook) po edycji produktu.
-// Ta sama logika co scripts/seed-stripe.ts, ale dla jednego produktu w runtime Next.
+// Wywoływane przez webhook WooCommerce (/api/woo/webhook) po edycji produktu.
+//
+// ODPORNOŚĆ NA PĘTLĘ: zapis meta do WooCommerce sam odpala kolejny webhook
+// product.updated. Żeby nie tworzyć kaskady cen:
+//   1) jeśli istnieje już aktywna cena Stripe o właściwej kwocie — UŻYJ jej
+//      (nie twórz nowej),
+//   2) meta w WC zapisz TYLKO gdy faktycznie się zmienia (re-trigger wtedy wygasa),
+//   3) wszystkie inne aktywne ceny produktu dezaktywuj (jedna aktywna na produkt).
 
 import { getStripe } from "./stripe";
 import {
@@ -10,10 +16,6 @@ import {
   updateProductMeta,
 } from "./woocommerce";
 
-/**
- * Dostraja cenę Stripe do ceny produktu w WooCommerce. Ceny Stripe są niezmienne,
- * więc przy różnicy tworzymy nową cenę i dezaktywujemy starą. Zwraca opis wyniku.
- */
 export async function syncProductPriceById(productId: number): Promise<string> {
   const p = await getProductById(productId);
   const sku = getProductSku(p);
@@ -22,52 +24,64 @@ export async function syncProductPriceById(productId: number): Promise<string> {
   const amount = Math.round(Number(p.price) * 100); // grosze
   if (!amount || amount <= 0) return "free";
 
-  const existingPriceId = getMeta(p, "stripe_price_id");
-
-  // Krótkie spięcie: jeśli ta kwota jest już zsynchronizowana, nic nie rób — bez
-  // wywołań Stripe. KLUCZOWE: nasz własny zapis meta też odpala webhook
-  // product.updated; ten guard sprawia, że taki re-trigger natychmiast wygasa
-  // (zamiast nakręcać kaskadę tworzenia kolejnych cen).
-  const syncedAmount = Number(getMeta(p, "stripe_synced_amount"));
-  if (existingPriceId && syncedAmount === amount) return "unchanged";
-
   const stripe = getStripe();
 
-  if (existingPriceId) {
-    const cur = await stripe.prices.retrieve(existingPriceId);
-    if (cur.unit_amount === amount && cur.currency === "pln") {
-      // Cena się zgadza, brakuje tylko znacznika — dopisz, żeby uciszyć webhooki.
-      await updateProductMeta(p.id, [{ key: "stripe_synced_amount", value: String(amount) }]);
-      return "unchanged";
+  // 1) Produkt Stripe dla SKU (z meta WC lub utworzony).
+  let productSid = getMeta(p, "stripe_product_id");
+  if (productSid) {
+    try {
+      await stripe.products.retrieve(productSid);
+    } catch {
+      productSid = undefined;
     }
-    const productSid = getMeta(p, "stripe_product_id") ?? (cur.product as string);
-    const price = await stripe.prices.create({
+  }
+  if (!productSid) {
+    const created = await stripe.products.create({ name: p.name, metadata: { sku } });
+    productSid = created.id;
+  }
+
+  // 2) Aktywne ceny produktu. Szukamy istniejącej o właściwej kwocie (reuse),
+  //    a jak brak — tworzymy jedną.
+  const active = (
+    await stripe.prices.list({ product: productSid, active: true, limit: 100 })
+  ).data;
+  const match = active.find(
+    (pr) =>
+      pr.unit_amount === amount &&
+      pr.currency === "pln" &&
+      pr.recurring?.interval === "year",
+  );
+  const target =
+    match ??
+    (await stripe.prices.create({
       product: productSid,
       unit_amount: amount,
       currency: "pln",
       recurring: { interval: "year" },
       metadata: { sku },
-    });
-    await stripe.prices.update(existingPriceId, { active: false });
-    await updateProductMeta(p.id, [
-      { key: "stripe_price_id", value: price.id },
-      { key: "stripe_synced_amount", value: String(amount) },
-    ]);
-    return `updated:${price.id}`;
+    }));
+
+  // 3) Dezaktywuj wszystkie inne aktywne ceny (inna kwota lub duplikaty).
+  for (const pr of active) {
+    if (pr.id !== target.id) {
+      try {
+        await stripe.prices.update(pr.id, { active: false });
+      } catch {
+        /* ignoruj pojedyncze błędy */
+      }
+    }
   }
 
-  const product = await stripe.products.create({ name: p.name, metadata: { sku } });
-  const price = await stripe.prices.create({
-    product: product.id,
-    unit_amount: amount,
-    currency: "pln",
-    recurring: { interval: "year" },
-    metadata: { sku },
-  });
-  await updateProductMeta(p.id, [
-    { key: "stripe_product_id", value: product.id },
-    { key: "stripe_price_id", value: price.id },
-    { key: "stripe_synced_amount", value: String(amount) },
-  ]);
-  return `created:${price.id}`;
+  // 4) Zapis meta TYLKO gdy się zmienia — inaczej kolejny webhook od tego zapisu
+  //    natychmiast wygaśnie (to przerywa kaskadę).
+  const curPriceId = getMeta(p, "stripe_price_id");
+  const curProductId = getMeta(p, "stripe_product_id");
+  if (curPriceId !== target.id || curProductId !== productSid) {
+    await updateProductMeta(p.id, [
+      { key: "stripe_product_id", value: productSid },
+      { key: "stripe_price_id", value: target.id },
+    ]);
+    return `set:${target.id}`;
+  }
+  return "unchanged";
 }
