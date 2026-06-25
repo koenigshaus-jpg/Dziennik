@@ -32,29 +32,44 @@ użytkownika (patrz „Strona WP" niżej).
 - **Checkout (szkielet)**: `src/lib/agent/checkout.ts` → `src/app/api/checkout/route.ts`.
   Dopóki brak `STRIPE_SECRET_KEY` → 503 i UI „Płatności wkrótce".
 
-## DO ZROBIENIA: integracja Stripe (następny etap)
+## Integracja Stripe — ZROBIONE (tryb test)
 
-Wymaga kluczy Stripe od właściciela. Model: **Stripe Checkout w trybie subscription
-(roczna)** + webhook → upsert do `entitlements`.
+Model: **Stripe Checkout (subscription, roczna)** + webhook → upsert do `entitlements`.
 
-1. **Konto/klucze Stripe** → env: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`,
-   `NEXT_PUBLIC_APP_URL` (do success/cancel URL). Dodać do `.env.local` i Vercel.
-2. **Produkty/ceny w Stripe**: jedna cena roczna (recurring `interval=year`) per persona
-   płatna + jedna dla pakietu `all`. Zmapować `sku` → Stripe Price ID (np. tabela mapująca
-   w Supabase albo konfiguracja w kodzie/env). Rozważ utworzenie skryptem przez Stripe API.
-3. **`/api/checkout`** (już jest szkielet): utworzyć `stripe.checkout.sessions.create`
-   (`mode: "subscription"`, `line_items` z Price ID dla SKU, `client_reference_id = user.id`,
-   `success_url`/`cancel_url`), zwrócić `{ url }`. `checkout.ts` już przekierowuje na `url`.
-4. **Webhook `/api/stripe/webhook`** (do utworzenia): weryfikacja podpisu
-   `STRIPE_WEBHOOK_SECRET`; obsługa `checkout.session.completed`,
-   `customer.subscription.updated/deleted`. Upsert do `entitlements`
-   (`user_id`, `sku`, `status`, `current_period_end`, `stripe_subscription_id`,
-   `stripe_customer_id`) przez `getSupabaseAdmin()` (service_role, omija RLS).
-   Po sukcesie front robi `window.dispatchEvent(new Event("entitlements-changed"))`
-   (już obsłużone w `useEntitlements`) — albo refetch na powrocie z Stripe.
-5. **Mapowanie user → Stripe customer**: zapisywać `stripe_customer_id`, by anulowanie/
-   odnowienie aktualizowało właściwe `entitlements`.
-6. (Opcjonalnie) Strona „Moje subskrypcje" / portal klienta Stripe do anulowania.
+- `src/lib/stripe.ts` — klient (env `STRIPE_SECRET_KEY`, apiVersion `2026-06-24.dahlia`).
+- `scripts/seed-stripe.ts` — tworzy w Stripe Product+Price (roczna, PLN) dla każdego
+  płatnego produktu WC (persony >0 zł + pakiet) i zapisuje `stripe_price_id` do meta WC.
+  Idempotentny. (advisor darmowy — pomijany.) Uruchom: `npx tsx scripts/seed-stripe.ts`.
+- `getStripePriceMap()` (woocommerce.ts) — mapa SKU → price ID z meta WC.
+- `/api/checkout` — tworzy sesję Checkout (`mode: subscription`, `client_reference_id`,
+  `subscription_data.metadata = {user_id, sku}`), zwraca `{ url }`. ZWERYFIKOWANE: 200 + URL
+  checkout.stripe.com.
+- `/api/stripe/webhook` — weryfikuje podpis `STRIPE_WEBHOOK_SECRET`; obsługuje
+  `customer.subscription.created/updated/deleted` + `checkout.session.completed`; upsert do
+  `entitlements` przez `getSupabaseAdmin()`. Okres bierze z `items.data[0].current_period_end`.
+  ZWERYFIKOWANE: podpisane zdarzenie → wiersz w `entitlements`. **Endpoint jest w PUBLIC_PATHS
+  w `src/proxy.ts`** (własna autoryzacja podpisem — nie może być za sesją).
+
+## DO ZROBIENIA: produkcja (go-live)
+
+1. **Zmienne na Vercel** (Settings → Environment Variables, dla Production):
+   `WOOCOMMERCE_URL`, `WOOCOMMERCE_CONSUMER_KEY`, `WOOCOMMERCE_CONSUMER_SECRET`,
+   `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` (+ istniejące Supabase/OpenAI). Bez nich
+   produkcyjny `/sklep` pokazuje „nie skonfigurowany", a checkout zwraca 503.
+2. **Webhook endpoint w Stripe** (Developers → Webhooks → Add endpoint):
+   URL `https://dziennik-xi.vercel.app/api/stripe/webhook`, zdarzenia:
+   `customer.subscription.created/updated/deleted`, `checkout.session.completed`.
+   Skopiować wygenerowany `whsec_...` do `STRIPE_WEBHOOK_SECRET` na Vercel.
+3. **Test E2E na produkcji** (tryb test Stripe): kliknij „Kup" → checkout → karta testowa
+   `4242 4242 4242 4242` → powrót na `/sklep?zakup=ok` → persona odblokowana.
+4. **Go live**: aktywuj konto Stripe (dane firmy), przełącz klucze na `sk_live_`/`whsec_`
+   live, ponownie uruchom `seed-stripe` w trybie live (utworzy produkty/ceny live).
+   Rozważ Stripe Tax (VAT) — patrz uwagi o VAT.
+5. (Opcjonalnie) Portal klienta Stripe (anulowanie subskrypcji) + strona „Moje subskrypcje".
+
+> Lokalnie webhook testowano podpisanym zdarzeniem (`STRIPE_WEBHOOK_SECRET` = placeholder
+> w `.env.local`). Do realnych testów lokalnych użyj Stripe CLI:
+> `stripe listen --forward-to localhost:3000/api/stripe/webhook`.
 
 ## Uwagi
 

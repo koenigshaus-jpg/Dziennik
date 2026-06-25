@@ -23,6 +23,7 @@ const PUBLIC_PATHS = [
   "/oauth/token",                                // token endpoint
   "/oauth/authorize/decision",                   // POST decision (own auth check)
   "/api/mcp",                                    // MCP HTTP transport (own withMcpAuth)
+  "/api/stripe/webhook",                         // webhook Stripe — własna autoryzacja (podpis)
   // /oauth/authorize zostaje POD loginem — wymaga sesji Supabase do consent
 ];
 

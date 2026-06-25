@@ -99,6 +99,27 @@ export function getProductSku(p: WooProduct): string | null {
   return getMeta(p, "persona_key") ?? (isBundle(p) ? "all" : null);
 }
 
+/**
+ * Mapa SKU → Stripe price ID (meta `stripe_price_id` na produkcie WC, zapisywana
+ * przez scripts/seed-stripe.ts). Server-only. Pusta, gdy sklep niedostępny.
+ */
+export async function getStripePriceMap(): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  if (!isWooConfigured()) return map;
+  let products: WooProduct[];
+  try {
+    products = await listProducts({ perPage: 100 });
+  } catch {
+    return map;
+  }
+  for (const p of products) {
+    const sku = getProductSku(p);
+    const priceId = getMeta(p, "stripe_price_id");
+    if (sku && priceId) map.set(sku, priceId);
+  }
+  return map;
+}
+
 // --- Operacje ---
 
 /** Lista opublikowanych produktów. */
