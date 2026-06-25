@@ -8,10 +8,12 @@ import {
 } from "@/lib/agent";
 import { resolvePersona } from "@/lib/agent/persona-source";
 import {
-  computeUnlocked,
-  isPersonaFree,
+  FREE_PERSONA_KEYS,
+  isPersonaUnlocked,
+  parseEntitlements,
   type EntitlementRow,
 } from "@/lib/agent/entitlements";
+import { getPersonaOverrides } from "@/lib/woocommerce";
 import { createSupabaseRouteHandlerClient } from "@/lib/supabase/server";
 import { hybridSearchEntries } from "@/lib/api/hybrid-search";
 
@@ -77,15 +79,22 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Niezalogowany." }, { status: 401 });
   }
 
-  // Gating: płatna persona wymaga aktywnego uprawnienia (entitlement). Darmowe
-  // persony przechodzą bez zapytania. Chroni przed obejściem blokady w UI.
+  // Gating: płatna persona (cena > 0 w WC) wymaga aktywnego uprawnienia. Darmowe
+  // (cena 0) przechodzą bez zapytania. Chroni przed obejściem blokady w UI.
   const personaKey = body.personaKey as PersonaKey;
-  if (!isPersonaFree(personaKey)) {
+  let isFree = FREE_PERSONA_KEYS.has(personaKey);
+  try {
+    const ovr = (await getPersonaOverrides()).get(personaKey);
+    if (ovr) isFree = Number(ovr.price) === 0;
+  } catch {
+    /* WC niedostępne → zostaje fallback FREE_PERSONA_KEYS */
+  }
+  if (!isFree) {
     const { data: ents } = await supabase
       .from("entitlements")
       .select("sku,status,current_period_end");
-    const { unlocked } = computeUnlocked((ents ?? []) as EntitlementRow[]);
-    if (!unlocked.has(personaKey)) {
+    const ent = parseEntitlements((ents ?? []) as EntitlementRow[]);
+    if (!isPersonaUnlocked(personaKey, false, ent)) {
       return NextResponse.json(
         { error: "persona_locked", personaKey },
         { status: 402 },

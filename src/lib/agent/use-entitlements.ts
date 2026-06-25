@@ -1,24 +1,21 @@
 "use client";
 
 // Hook czytający uprawnienia użytkownika z Supabase (tabela `entitlements`, RLS
-// per user). Zwraca zbiór odblokowanych person (darmowe zawsze w środku) + flagę
-// pakietu. Refetch przy montowaniu, na `focus` okna i na evencie
-// `entitlements-changed` (dispatchowanym po powrocie z zakupu).
+// per user). Zwraca aktywne SKU + flagę pakietu. „Darmowość" persony liczy się
+// osobno (z listy person / ceny WC) — patrz isPersonaUnlocked.
+// Refetch przy montowaniu, na `focus` i na evencie `entitlements-changed`.
 
 import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabase/client";
-import type { PersonaKey } from "./types";
-import { computeUnlocked, FREE_PERSONA_KEYS, type EntitlementRow } from "./entitlements";
+import { parseEntitlements, type EntitlementRow, type EntitlementState } from "./entitlements";
 
-export interface EntitlementsState {
-  unlocked: Set<PersonaKey>;
-  hasAll: boolean;
+export interface EntitlementsState extends EntitlementState {
   loading: boolean;
 }
 
 export function useEntitlements(): EntitlementsState {
   const [state, setState] = React.useState<EntitlementsState>({
-    unlocked: new Set(FREE_PERSONA_KEYS),
+    activeSkus: new Set(),
     hasAll: false,
     loading: true,
   });
@@ -30,11 +27,10 @@ export function useEntitlements(): EntitlementsState {
         .from("entitlements")
         .select("sku,status,current_period_end");
       if (error) throw error;
-      const { unlocked, hasAll } = computeUnlocked((data ?? []) as EntitlementRow[]);
-      setState({ unlocked, hasAll, loading: false });
+      const ent = parseEntitlements((data ?? []) as EntitlementRow[]);
+      setState({ ...ent, loading: false });
     } catch {
-      // Brak sesji / błąd → tylko darmowe persony.
-      setState({ unlocked: new Set(FREE_PERSONA_KEYS), hasAll: false, loading: false });
+      setState({ activeSkus: new Set(), hasAll: false, loading: false });
     }
   }, []);
 

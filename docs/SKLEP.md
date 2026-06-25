@@ -19,6 +19,24 @@ użytkownika (patrz „Strona WP" niżej).
   runtime (`getPersonaOverrides` w `src/lib/woocommerce.ts` → `resolvePersona` w
   `src/lib/agent/persona-source.ts`), wpięte w `api/chat` i `api/v1/chat`. Kod person
   (`src/lib/agent/personas/`) = fallback. Cache 60 s.
+- **Lista person sterowana WooCommerce**: dropdown w czacie buduje się z produktów WC
+  (tych z `persona_key`) przez `/api/personas` (`getPersonaList` → klient `usePersonas`),
+  z fallbackiem do kodu. „Darmowość" persony = cena 0 w WC (`isFree`). Gating liczy
+  `isPersonaUnlocked` (free | pakiet | kupiona) — `entitlements.ts`.
+
+### Jak dodać nowego konsultanta (tylko WooCommerce, bez kodu)
+1. WooCommerce → **Produkty → Dodaj nowy**. Nazwa = nazwa konsultanta. Typ: prosty,
+   **wirtualny**. Cena = roczna kwota (np. 1) lub 0 dla darmowego.
+2. W **Polach własnych** dodaj:
+   - `persona_key` — unikalny klucz (np. `mentorZdrowia`; bez spacji)
+   - `persona_prompt` — system prompt konsultanta
+   - `persona_icon` — nazwa ikony lucide (np. `HeartPulse`, `Brain`, `Compass`)
+   - (opcjonalnie) `persona_model` = `gpt-4o-mini`, `persona_deep_model` = `gpt-4o`,
+     `persona_temperature` = np. `0.5`
+3. Opublikuj. Pojawi się w `/sklep` i w dropdownie czatu (do ~1 min — cache 60 s).
+   Webhook WC dosynchronizuje cenę do Stripe automatycznie. Gotowe — bez zmian w kodzie.
+
+Persony z `src/lib/agent/personas/` zostają jako fallback (gdy WC niedostępne).
 - **Frontend `/sklep`**: lista + baner pakietu (`src/app/sklep/page.tsx`), karta produktu
   (`src/app/sklep/[slug]/page.tsx` — rozpoznaje slug | persona_key | `all`). Estetyka
   Dziennika (serif `font-display`, gradienty conic za ikonami). Link „Sklep" przypięty

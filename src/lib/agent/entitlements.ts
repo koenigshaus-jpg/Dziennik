@@ -1,19 +1,12 @@
 // Logika uprawnień do person (współdzielona klient/serwer — bez importów
-// server-only). Źródłem prawdy o zakupach jest tabela `entitlements` (Supabase);
-// tu tylko reguły, które persony są darmowe i jak rozwinąć SKU na klucze person.
-
-import type { PersonaKey } from "./types";
-import { PERSONA_ORDER } from "./personas";
-
-/** Persony dostępne bez zakupu. Darmowy Doradca biznesowy. */
-export const FREE_PERSONA_KEYS: ReadonlySet<PersonaKey> = new Set(["advisor"]);
+// server-only). Źródłem prawdy o zakupach jest tabela `entitlements` (Supabase).
+// „Darmowość" persony wynika z ceny w WooCommerce (0 zł), nie z listy w kodzie.
 
 /** SKU pakietu „wszystko" (obecne i przyszłe persony). */
 export const BUNDLE_SKU = "all";
 
-export function isPersonaFree(key: PersonaKey): boolean {
-  return FREE_PERSONA_KEYS.has(key);
-}
+/** Fallback, gdy WooCommerce niedostępne i nie znamy ceny: darmowy Doradca. */
+export const FREE_PERSONA_KEYS: ReadonlySet<string> = new Set(["advisor"]);
 
 /** Wiersz uprawnienia (tak jak w tabeli entitlements). */
 export interface EntitlementRow {
@@ -28,24 +21,29 @@ function isActive(row: EntitlementRow): boolean {
   return new Date(row.current_period_end).getTime() > Date.now();
 }
 
-/**
- * Z listy wierszy uprawnień liczy zbiór odblokowanych person.
- * Darmowe persony są zawsze w zbiorze. Pakiet (`all`) odblokowuje wszystkie.
- */
-export function computeUnlocked(rows: EntitlementRow[]): {
-  unlocked: Set<PersonaKey>;
+export interface EntitlementState {
+  /** SKU (persona_key) z aktywnym uprawnieniem. */
+  activeSkus: Set<string>;
+  /** Czy użytkownik ma pakiet „all" (odblokowuje wszystkie persony). */
   hasAll: boolean;
-} {
-  const unlocked = new Set<PersonaKey>(FREE_PERSONA_KEYS);
+}
+
+export function parseEntitlements(rows: EntitlementRow[]): EntitlementState {
+  const activeSkus = new Set<string>();
   let hasAll = false;
   for (const row of rows) {
     if (!isActive(row)) continue;
-    if (row.sku === BUNDLE_SKU) {
-      hasAll = true;
-      for (const k of PERSONA_ORDER) unlocked.add(k);
-    } else if (PERSONA_ORDER.includes(row.sku as PersonaKey)) {
-      unlocked.add(row.sku as PersonaKey);
-    }
+    if (row.sku === BUNDLE_SKU) hasAll = true;
+    else activeSkus.add(row.sku);
   }
-  return { unlocked, hasAll };
+  return { activeSkus, hasAll };
+}
+
+/** Czy persona jest odblokowana: darmowa, w pakiecie, lub kupiona osobno. */
+export function isPersonaUnlocked(
+  key: string,
+  isFree: boolean,
+  ent: EntitlementState,
+): boolean {
+  return isFree || ent.hasAll || ent.activeSkus.has(key);
 }

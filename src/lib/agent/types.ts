@@ -2,13 +2,28 @@
 // wyłącznie do tych typów — implementacje provider'ów (vercel-openai itd.)
 // są podmienne bez zmian w reszcie kodu.
 
-export type PersonaKey =
+// Klucz persony. Persony mogą być definiowane w WooCommerce (produkty z polem
+// `persona_key`), więc klucz jest stringiem. Persony „wbudowane" (poniżej) służą
+// jako fallback, gdy WooCommerce jest niedostępne.
+export type PersonaKey = string;
+
+export type BuiltinPersonaKey =
   | "advisor"
   | "therapist"
   | "philosopher"
   | "careerCoach"
   | "creative"
   | "productivity";
+
+/** Lekki opis persony do listy wyboru (klient pobiera z /api/personas). */
+export interface PersonaListItem {
+  key: string;
+  name: string;
+  description: string;
+  icon: string;
+  /** Darmowa (cena 0 w WooCommerce) — zawsze dostępna. */
+  isFree: boolean;
+}
 
 export interface PersonaConfig {
   key: PersonaKey;

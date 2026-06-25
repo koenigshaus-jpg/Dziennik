@@ -20,10 +20,12 @@ import {
 } from "@/lib/agent";
 import { resolvePersona } from "@/lib/agent/persona-source";
 import {
-  computeUnlocked,
-  isPersonaFree,
+  FREE_PERSONA_KEYS,
+  isPersonaUnlocked,
+  parseEntitlements,
   type EntitlementRow,
 } from "@/lib/agent/entitlements";
+import { getPersonaOverrides } from "@/lib/woocommerce";
 import type { PersonaKey } from "@/lib/agent/types";
 import { getSupabaseAdmin } from "@/lib/api/supabase-admin";
 
@@ -65,14 +67,22 @@ export const POST = withApiHandler(async (req, { user }) => {
     conversation = await createConversation(user.userId, personaKey);
   }
 
-  // Gating: płatna persona wymaga aktywnego uprawnienia (jak w /api/chat).
-  if (!isPersonaFree(conversation.persona_key as PersonaKey)) {
+  // Gating: płatna persona (cena > 0 w WC) wymaga aktywnego uprawnienia.
+  const pkey = conversation.persona_key as PersonaKey;
+  let isFree = FREE_PERSONA_KEYS.has(pkey);
+  try {
+    const ovr = (await getPersonaOverrides()).get(pkey);
+    if (ovr) isFree = Number(ovr.price) === 0;
+  } catch {
+    /* fallback do FREE_PERSONA_KEYS */
+  }
+  if (!isFree) {
     const { data: ents } = await getSupabaseAdmin()
       .from("entitlements")
       .select("sku,status,current_period_end")
       .eq("user_id", user.userId);
-    const { unlocked } = computeUnlocked((ents ?? []) as EntitlementRow[]);
-    if (!unlocked.has(conversation.persona_key as PersonaKey)) {
+    const ent = parseEntitlements((ents ?? []) as EntitlementRow[]);
+    if (!isPersonaUnlocked(pkey, false, ent)) {
       throw new ApiError("persona_locked", 402, {
         persona_key: conversation.persona_key,
       });

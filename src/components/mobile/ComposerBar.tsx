@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { PersonaMenuList } from "@/components/agent/PersonaMenuList";
 import { getPersona } from "@/lib/agent/personas";
+import { usePersonas } from "@/lib/agent/use-personas";
 import {
   getDefaultPersona,
   setDefaultPersona,
@@ -66,7 +67,9 @@ export const ComposerBar = React.forwardRef<ComposerBarHandle, Props>(
       setPersonaKey(key);
     }, []);
 
-    const selectedPersona = getPersona(personaKey);
+    const { personas } = usePersonas();
+    const selectedPersona =
+      personas.find((p) => p.key === personaKey) ?? getPersona(personaKey);
     const PersonaIcon = getLucideIcon(selectedPersona.icon);
 
     const { recording, processing, elapsed, maxSeconds, start, stop } = useStt({

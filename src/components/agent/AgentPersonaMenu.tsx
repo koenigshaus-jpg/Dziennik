@@ -12,6 +12,7 @@ import {
 import { cn } from "@/lib/utils";
 import { PersonaMenuList } from "@/components/agent/PersonaMenuList";
 import { getPersona } from "@/lib/agent/personas";
+import { usePersonas } from "@/lib/agent/use-personas";
 import type { PersonaKey } from "@/lib/agent/types";
 
 interface Props {
@@ -28,7 +29,8 @@ function getIcon(name: string): React.ComponentType<{ className?: string }> {
 }
 
 export function AgentPersonaMenu({ personaKey, onSelect }: Props) {
-  const persona = getPersona(personaKey);
+  const { personas } = usePersonas();
+  const persona = personas.find((p) => p.key === personaKey) ?? getPersona(personaKey);
   const Icon = getIcon(persona.icon);
 
   return (
