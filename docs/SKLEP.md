@@ -37,9 +37,19 @@ użytkownika (patrz „Strona WP" niżej).
 Model: **Stripe Checkout (subscription, roczna)** + webhook → upsert do `entitlements`.
 
 - `src/lib/stripe.ts` — klient (env `STRIPE_SECRET_KEY`, apiVersion `2026-06-24.dahlia`).
-- `scripts/seed-stripe.ts` — tworzy w Stripe Product+Price (roczna, PLN) dla każdego
-  płatnego produktu WC (persony >0 zł + pakiet) i zapisuje `stripe_price_id` do meta WC.
-  Idempotentny. (advisor darmowy — pomijany.) Uruchom: `npx tsx scripts/seed-stripe.ts`.
+- `scripts/seed-stripe.ts` — tworzy/synchronizuje w Stripe Product+Price (roczna, PLN)
+  dla każdego płatnego produktu WC (persony >0 zł + pakiet) i zapisuje `stripe_price_id`
+  do meta WC. (advisor darmowy — pomijany.) Uruchom: `npx tsx scripts/seed-stripe.ts`.
+
+### Jak zmienić cenę produktu
+Model: **Stripe = źródło prawdy ceny przy płatności, WooCommerce = wyświetlanie**.
+1. W panelu WooCommerce: *Produkty → [produkt] → Cena (regular_price)* — ustaw nową kwotę.
+2. Uruchom `npx tsx scripts/seed-stripe.ts`. Skrypt porówna cenę WC z aktualną ceną Stripe;
+   jeśli się różni — utworzy NOWĄ cenę Stripe (ceny są niezmienne), dezaktywuje starą i
+   podmieni `stripe_price_id` w meta WC. Etykieta w aplikacji (z WC) i kwota pobierana
+   (z nowego Stripe Price) są od tej chwili zgodne.
+Uwaga: zmiana ceny nie wpływa na istniejące aktywne subskrypcje (rozliczają się po cenie
+z momentu zakupu) — dotyczy nowych zakupów.
 - `getStripePriceMap()` (woocommerce.ts) — mapa SKU → price ID z meta WC.
 - `/api/checkout` — tworzy sesję Checkout (`mode: subscription`, `client_reference_id`,
   `subscription_data.metadata = {user_id, sku}`), zwraca `{ url }`. ZWERYFIKOWANE: 200 + URL

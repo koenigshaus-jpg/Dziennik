@@ -4,8 +4,12 @@
  * `stripe_price_id` z powrotem do meta produktu WC (mapa SKU → price używana
  * przez /api/checkout).
  *
- * Idempotentny: produkt WC, który ma już `stripe_price_id`, jest pomijany.
+ * Synchronizuje cenę: jeśli cena w WC (regular_price) różni się od aktualnej ceny
+ * w Stripe, tworzy NOWĄ cenę Stripe (ceny są niezmienne), dezaktywuje starą i
+ * podmienia `stripe_price_id` w meta WC. Bez zmian → pomija.
  * Darmowy Doradca (cena 0) jest pomijany — nigdy nie jest kupowany.
+ *
+ * Zmiana ceny: edytuj cenę w produkcie WooCommerce → uruchom ten skrypt.
  *
  * Uruchom:  npx tsx scripts/seed-stripe.ts
  */
@@ -66,8 +70,30 @@ async function main() {
       console.log(`• ${sku} — darmowy/0, pomijam`);
       continue;
     }
-    if (metaVal(p, "stripe_price_id")) {
-      console.log(`• ${sku} — ma już stripe_price_id, pomijam`);
+    const existingPriceId = metaVal(p, "stripe_price_id");
+    if (existingPriceId) {
+      // Synchronizacja: porównaj cenę WC z aktualną ceną Stripe.
+      const cur = await stripe.prices.retrieve(existingPriceId);
+      if (cur.unit_amount === amount && cur.currency === "pln") {
+        console.log(`• ${sku} — cena bez zmian (${amount / 100} zł), pomijam`);
+        continue;
+      }
+      const productId = metaVal(p, "stripe_product_id") ?? (cur.product as string);
+      const price = await stripe.prices.create({
+        product: productId,
+        unit_amount: amount,
+        currency: "pln",
+        recurring: { interval: "year" },
+        metadata: { sku },
+      });
+      await stripe.prices.update(existingPriceId, { active: false }); // dezaktywuj starą
+      await wc(`products/${p.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ meta_data: [{ key: "stripe_price_id", value: price.id }] }),
+      });
+      console.log(
+        `↻ ${sku} — zmiana ceny ${(cur.unit_amount ?? 0) / 100}→${amount / 100} zł → ${price.id} (stara dezaktywowana)`,
+      );
       continue;
     }
 
