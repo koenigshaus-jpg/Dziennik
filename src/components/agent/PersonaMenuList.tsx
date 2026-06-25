@@ -43,17 +43,14 @@ export function PersonaMenuList({ activeKey, onSelect }: Props) {
         return (
           <DropdownMenuItem
             key={key}
-            disabled={locked}
-            onSelect={(e) => {
-              if (locked) {
-                e.preventDefault();
-                return;
-              }
-              onSelect(key);
+            onSelect={() => {
+              // Zablokowana persona → karta produktu (zakup). Odblokowana → wybór.
+              if (locked) router.push(`/sklep/${key}`);
+              else onSelect(key);
             }}
             className={cn(
-              "flex flex-col items-start gap-0.5 py-2.5",
-              locked && "opacity-60",
+              "flex flex-col items-start gap-0.5 py-2.5 cursor-pointer",
+              locked && "opacity-70",
             )}
           >
             <div className="flex w-full items-center gap-2">
@@ -64,17 +61,9 @@ export function PersonaMenuList({ activeKey, onSelect }: Props) {
               )}
               <span className="text-sm font-medium">{p.name}</span>
               {locked ? (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    router.push(`/sklep/${key}`);
-                  }}
-                  className="ml-auto inline-flex items-center h-6 px-2.5 rounded-full bg-foreground text-background text-[11px] font-medium hover:bg-foreground/90"
-                >
+                <span className="ml-auto inline-flex items-center h-6 px-2.5 rounded-full bg-foreground text-background text-[11px] font-medium">
                   Kup
-                </button>
+                </span>
               ) : (
                 isActive && <Check className="ml-auto h-3.5 w-3.5 text-foreground/70" />
               )}
