@@ -5,7 +5,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import * as LucideIcons from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { X, Settings, LogOut, Loader2, Tag as TagIcon, BookOpen, Images } from "lucide-react";
+import { X, Settings, LogOut, Loader2, Tag as TagIcon, BookOpen, Images, ShoppingBag } from "lucide-react";
 import { useGallery } from "@/components/media/GalleryDialogProvider";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 import { getSupabaseClient } from "@/lib/supabase/client";
@@ -178,6 +178,16 @@ export function HamburgerDrawer({ open, onOpenChange }: Props) {
                     <Images className="h-4 w-4" />
                     Galeria
                   </button>
+                </li>
+                <li>
+                  <Link
+                    href="/sklep"
+                    onClick={() => onOpenChange(false)}
+                    className="flex items-center gap-3 px-3 h-11 rounded-md text-sm hover:bg-foreground/5"
+                  >
+                    <ShoppingBag className="h-4 w-4" />
+                    Sklep
+                  </Link>
                 </li>
                 <li>
                   <Link

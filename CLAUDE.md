@@ -63,9 +63,20 @@ Breakpoint that switches "mobile" vs "desktop" mode is Tailwind's `lg` (≥1024p
 
 Save UI differs by breakpoint inside `EntryEditor`: a small button in the top-right header on lg (`hidden lg:inline-flex`), a floating button at `fixed bottom-20 right-4` on mobile (`lg:hidden`). Both use the same `Button` (default variant).
 
+### Sklep (headless WooCommerce)
+
+Sklep w Dzienniku to **headless WooCommerce**: backend (WordPress+WooCommerce) na osobnym hostingu (`sklep.koenigshaus.pl`), frontend `/sklep` w tej aplikacji. Klient: [src/lib/woocommerce.ts](src/lib/woocommerce.ts) — **server-only** (Consumer Key/Secret w env `WOOCOMMERCE_URL`/`_CONSUMER_KEY`/`_CONSUMER_SECRET`, nigdy `NEXT_PUBLIC`). Strona [src/app/sklep/page.tsx](src/app/sklep/page.tsx) to Server Component (`revalidate = 60`). Link w menu: `HamburgerDrawer`.
+
+**Konsultanci = produkty.** Każda persona Agenta ma odpowiadający produkt WC (virtual) z polami własnymi `persona_key`, `persona_prompt`, `persona_model`, `persona_deep_model`, `persona_temperature`, `persona_icon`. Doradca biznesowy (advisor) jest darmowy (0 zł), reszta 1 zł. Seed/aktualizacja: [scripts/seed-shop.ts](scripts/seed-shop.ts) (`npx tsx scripts/seed-shop.ts`, idempotentny po `persona_key`).
+
+**Prompty z panelu WC.** Prompt persony edytuje się w WooCommerce (pole własne `persona_prompt`), a serwer czyta go runtime przez `getPersonaOverrides()` (woocommerce.ts) → `resolvePersona()` ([src/lib/agent/persona-source.ts](src/lib/agent/persona-source.ts), server-only), wpięte w **oba** route'y czatu: [api/chat](src/app/api/chat/route.ts) i [api/v1/chat](src/app/api/v1/chat/route.ts). Persona z kodu (`src/lib/agent/personas/`) jest fallbackiem, gdy WC niedostępne. Odczyt cache'owany 60 s — edycja w panelu pojawia się w czacie do ~minuty. **Klient (UI wyboru persony) nadal używa statycznego `PERSONAS`** — nadpisania z WC dotyczą tylko warstwy serwerowej budującej system prompt.
+
+> NIEZROBIONE (TODO): gating płatnych person (obecnie wszystkie person działają w czacie niezależnie od „zakupu"), flow zakupu + Stripe + webhook → entitlement w Supabase, przycisk „Kup" na kartach `/sklep`.
+
 ### Routing
 
 - `/` — new entry (`EntryForm mode="create"`). After successful create the redirect picks a target by viewport: desktop → `/historia?id=<newId>`, mobile → `/wpis/<newId>` (see `EntryForm.save`).
+- `/sklep` — sklep (lista produktów-konsultantów z WooCommerce). Za auth jak reszta.
 - `/historia` — list with filters (`q`, `tag`, `from`, `to`, `mood`) and selection (`id`). Mobile renders the list full-width; desktop renders `HistorySplit` with the same state. List entries link to `/wpis/[id]` on mobile, call `router.replace('/historia?id=…')` on desktop.
 - `/wpis/[id]` — single entry editor (mobile primary). Desktop users typically stay in the split view.
 - `/login`, `/api/login`, `/api/logout` — auth wiring exists but is currently disabled in [src/proxy.ts](src/proxy.ts) (`AUTH_ENABLED = false`). Re-enabling requires `SESSION_SECRET` and `APP_PASSWORD` env vars (see [src/lib/session-server.ts](src/lib/session-server.ts)).

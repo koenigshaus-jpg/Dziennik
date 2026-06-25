@@ -3,10 +3,10 @@ import { NextResponse } from "next/server";
 import {
   buildSystemPrompt,
   getChatProvider,
-  getPersona,
   type ChatRequestPayload,
   type PersonaKey,
 } from "@/lib/agent";
+import { resolvePersona } from "@/lib/agent/persona-source";
 import { createSupabaseRouteHandlerClient } from "@/lib/supabase/server";
 import { hybridSearchEntries } from "@/lib/api/hybrid-search";
 
@@ -72,7 +72,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Niezalogowany." }, { status: 401 });
   }
 
-  const persona = getPersona(body.personaKey as PersonaKey);
+  const persona = await resolvePersona(body.personaKey as PersonaKey);
 
   // Retrieval: hybrydowe wyszukiwanie wpisów pod ostatnie pytanie użytkownika.
   const query = lastUserText(body.messages);

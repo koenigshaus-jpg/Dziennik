@@ -15,10 +15,10 @@ import { todayInWarsaw } from "@/lib/api/dates";
 import {
   buildSystemPrompt,
   getChatProvider,
-  getPersona,
   PERSONAS,
   PERSONA_ORDER,
 } from "@/lib/agent";
+import { resolvePersona } from "@/lib/agent/persona-source";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -58,7 +58,7 @@ export const POST = withApiHandler(async (req, { user }) => {
     conversation = await createConversation(user.userId, personaKey);
   }
 
-  const persona = getPersona(conversation.persona_key);
+  const persona = await resolvePersona(conversation.persona_key);
 
   // 2) Retrieval: hybrydowe wyszukiwanie wpisów pod treść pytania (server-side)
   const retrieved = await hybridSearchEntries(user.userId, body.text, { day });
