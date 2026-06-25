@@ -66,6 +66,10 @@ wygasa (handler kończy bez tworzenia cen).
 
 Uwaga: zmiana ceny nie wpływa na istniejące aktywne subskrypcje (rozliczają się po cenie
 z momentu zakupu) — dotyczy nowych zakupów.
+
+**Porządki w Stripe:** `npx tsx scripts/prune-stripe-prices.ts` — zostawia aktywną tylko
+cenę wskazaną przez WC (`stripe_price_id`), resztę archiwizuje. Każdy produkt = 1 aktywna
+cena. Przydatne, gdyby seria szybkich zmian/backlog webhooków utworzyła nadmiarowe ceny.
 - `getStripePriceMap()` (woocommerce.ts) — mapa SKU → price ID z meta WC.
 - `/api/checkout` — tworzy sesję Checkout (`mode: subscription`, `client_reference_id`,
   `subscription_data.metadata = {user_id, sku}`), zwraca `{ url }`. ZWERYFIKOWANE: 200 + URL
