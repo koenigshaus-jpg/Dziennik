@@ -156,40 +156,39 @@ async function signMedia(
   }));
 }
 
-async function upsertTags(
-  userId: string,
-  names: string[]
-): Promise<{ id: string; name: string }[]> {
-  if (names.length === 0) return [];
-  const supabase = getSupabaseClient();
-  const normalized = Array.from(new Set(names.map((n) => n.toLowerCase().trim()))).filter(
-    (n) => n.length > 0
-  );
-  if (normalized.length === 0) return [];
-  const { error: upErr } = await supabase
-    .from("tags")
-    .upsert(
-      normalized.map((name) => ({ user_id: userId, name })),
-      { onConflict: "user_id,name", ignoreDuplicates: true }
-    );
-  if (upErr) throw upErr;
-  const { data, error } = await supabase
-    .from("tags")
-    .select("id,name")
-    .eq("user_id", userId)
-    .in("name", normalized);
-  if (error) throw error;
-  return data ?? [];
+// --- Zapis wpisu przez Strapi (źródło prawdy) ---
+// Wpis + tagi zapisujemy w Strapi przez server-side route (token ukryty).
+// Lifecycle hook Strapi odbija treść do Supabase (entries + entry_tags) i
+// wyzwala wektoryzację. Media zostają po stronie Supabase (niżej).
+
+type StrapiEntryPayload = {
+  entryId: string;
+  contentHtml: string;
+  contentText: string;
+  mood: string | null;
+  tags: string[];
+  createdAt: string; // ISO
+};
+
+async function strapiEntryWrite(method: "POST" | "PUT", payload: StrapiEntryPayload): Promise<void> {
+  const res = await fetch("/api/strapi/entries", {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(j.error ?? `Zapis do Strapi nie powiódł się (${res.status}).`);
+  }
 }
 
-async function setEntryTags(entryId: string, tagIds: string[]): Promise<void> {
-  const supabase = getSupabaseClient();
-  await supabase.from("entry_tags").delete().eq("entry_id", entryId);
-  if (tagIds.length > 0) {
-    const { error } = await supabase
-      .from("entry_tags")
-      .insert(tagIds.map((tag_id) => ({ entry_id: entryId, tag_id })));
-    if (error) throw error;
+async function strapiEntryDelete(entryId: string): Promise<void> {
+  const res = await fetch(`/api/strapi/entries?entryId=${encodeURIComponent(entryId)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(j.error ?? `Usunięcie w Strapi nie powiodło się (${res.status}).`);
   }
 }
 
@@ -237,24 +236,16 @@ export async function createEntry(input: {
   media: ClientMedia[];
 }): Promise<string> {
   const userId = await requireUserId();
-  const supabase = getSupabaseClient();
-  const { data, error } = await supabase
-    .from("entries")
-    .insert({
-      user_id: userId,
-      content_html: input.contentHtml,
-      content_text: htmlToText(input.contentHtml),
-      mood: input.mood,
-      created_at: input.createdAt.toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .select("id")
-    .single();
-  if (error || !data) throw error ?? new Error("Nie udało się utworzyć wpisu.");
-  const id = data.id as string;
-
-  const tagRows = await upsertTags(userId, input.tags);
-  await setEntryTags(id, tagRows.map((t) => t.id));
+  const id = newId();
+  await strapiEntryWrite("POST", {
+    entryId: id,
+    contentHtml: input.contentHtml,
+    contentText: htmlToText(input.contentHtml),
+    mood: input.mood,
+    tags: input.tags,
+    createdAt: input.createdAt.toISOString(),
+  });
+  // wiersz entries istnieje już w Supabase (odbity przez most), więc FK mediów zadziała
   await persistMedia(userId, id, input.media, []);
 
   emitChanged({ id, kind: "create" });
@@ -272,22 +263,16 @@ export async function updateEntry(
   }
 ): Promise<void> {
   const userId = await requireUserId();
+  await strapiEntryWrite("PUT", {
+    entryId: id,
+    contentHtml: input.contentHtml,
+    contentText: htmlToText(input.contentHtml),
+    mood: input.mood,
+    tags: input.tags,
+    createdAt: input.createdAt.toISOString(),
+  });
+
   const supabase = getSupabaseClient();
-  const { error: upErr } = await supabase
-    .from("entries")
-    .update({
-      content_html: input.contentHtml,
-      content_text: htmlToText(input.contentHtml),
-      mood: input.mood,
-      created_at: input.createdAt.toISOString(),
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", id);
-  if (upErr) throw upErr;
-
-  const tagRows = await upsertTags(userId, input.tags);
-  await setEntryTags(id, tagRows.map((t) => t.id));
-
   const { data: existingMedia, error: emErr } = await supabase
     .from("media")
     .select("id,path")
@@ -300,6 +285,7 @@ export async function updateEntry(
 
 export async function deleteEntry(id: string): Promise<void> {
   const supabase = getSupabaseClient();
+  // pobierz klucze mediów PRZED usunięciem (kaskada w Supabase skasuje wiersze media)
   const { data: mediaRows } = await supabase
     .from("media")
     .select("path")
@@ -309,8 +295,8 @@ export async function deleteEntry(id: string): Promise<void> {
       (mediaRows as { path: string }[]).map((m) => m.path)
     );
   }
-  const { error } = await supabase.from("entries").delete().eq("id", id);
-  if (error) throw error;
+  // usuń w Strapi → most kasuje wiersz entries w Supabase (kaskada: entry_tags, media, embeddings)
+  await strapiEntryDelete(id);
   emitChanged({ id, kind: "delete" });
 }
 
