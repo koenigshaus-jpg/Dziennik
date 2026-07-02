@@ -4,6 +4,8 @@ Osobista aplikacja-dziennik (PWA) dla jednego użytkownika, z wbudowanym asysten
 
 Ten dokument opisuje architekturę techniczną całości. Nie zawiera żadnych sekretów — wymienia jedynie **nazwy** zmiennych środowiskowych.
 
+> 🧪 **Jesteś na gałęzi `eksperyment`.** Ten plik opisuje architekturę **produkcyjną** (`main`). Zmiany eksperymentu (wielu użytkowników, Strapi jako źródło prawdy wpisów, izolacja embeddingów) są w osobnym dokumencie: **[architektura-eksperyment.md](architektura-eksperyment.md)**. Produkcja jest nietykalna — eksperymentu nie mergujemy do `main`.
+
 ---
 
 ## Spis treści
