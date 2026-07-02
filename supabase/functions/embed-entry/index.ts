@@ -69,9 +69,12 @@ async function embed(inputs: string[]): Promise<number[][]> {
   return json.data.map((d: { embedding: number[] }) => d.embedding);
 }
 
-// Współdzielony sekret z triggerem (pg_net dosyła nagłówek `x-embed-secret`).
-// Egzekwowany tylko gdy skonfigurowany — bez niego zachowanie jak dotąd.
-const WEBHOOK_SECRET = Deno.env.get("EMBED_WEBHOOK_SECRET");
+// Współdzielony sekret z triggerem tg_embed_entry (nagłówek `x-embed-secret`).
+// UWAGA: NIE czytamy go z env — redeploy przez Management API/MCP gubi/nadpisuje
+// sekrety funkcji (obserwowane 403 na poprawnym sekrecie), co zatrzymuje wektoryzację.
+// Dlatego, jak w migracji 0004 dla triggera, sekret wpisujemy WPROST przy deployu:
+// podstaw realną wartość w miejsce __EMBED_SECRET__ i wdróż. NIE commituj wartości.
+const WEBHOOK_SECRET = "__EMBED_SECRET__";
 
 Deno.serve(async (req) => {
   try {
