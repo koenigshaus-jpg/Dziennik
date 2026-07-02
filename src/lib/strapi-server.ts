@@ -13,6 +13,7 @@ const STRAPI_API_TOKEN = process.env.STRAPI_API_TOKEN;
 
 export interface StrapiEntryInput {
   entryId: string;
+  userId: string; // Supabase auth user id — właściciel wpisu (multi-user)
   contentHtml: string;
   contentText: string;
   mood: string | null;
@@ -30,6 +31,7 @@ function assertConfig(): { url: string; token: string } {
 function toData(input: StrapiEntryInput) {
   return {
     entryId: input.entryId,
+    userId: input.userId,
     contentHtml: input.contentHtml,
     contentText: input.contentText,
     mood: input.mood,

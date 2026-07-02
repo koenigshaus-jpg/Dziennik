@@ -5,15 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getSupabaseClient } from "@/lib/supabase/client";
-import { seedGuestEntries } from "@/lib/seed-guest";
 
 type EmailMode = "signin" | "signup";
-
-// Jedno wspólne konto gościa — wszyscy „goście" logują się na te same dane,
-// widzą te same wpisy i mogą dokładać własne. To zwykłe konto e-mail/hasło,
-// nie anonimowa sesja. Konfigurowalne przez env, z domyślnymi wartościami.
-const GUEST_EMAIL = process.env.NEXT_PUBLIC_GUEST_EMAIL || "gosc@dziennik.local";
-const GUEST_PASSWORD = process.env.NEXT_PUBLIC_GUEST_PASSWORD || "dziennik-gosc";
 
 function LoginForm() {
   const router = useRouter();
@@ -51,55 +44,16 @@ function LoginForm() {
     setInfo(null);
     const supabase = getSupabaseClient();
 
-    // Próba zalogowania na istniejące, wspólne konto gościa.
-    const { error } = await supabase.auth.signInWithPassword({
-      email: GUEST_EMAIL,
-      password: GUEST_PASSWORD,
-    });
-
-    // Logowanie się udało → konto już istnieje, nic nie seedujemy.
-    // Wpisy (demo + dodane przez innych gości) zostają na swoim miejscu.
-    if (!error) {
-      router.push(next);
-      router.refresh();
-      return;
-    }
-
-    // Pierwsze w historii wejście: konto gościa jeszcze nie istnieje → zakładamy
-    // je raz i tylko wtedy seedujemy przykładowymi wpisami.
-    const signUp = await supabase.auth.signUp({
-      email: GUEST_EMAIL,
-      password: GUEST_PASSWORD,
-    });
-    if (signUp.error) {
+    // Izolowana sesja anonimowa — każdy „gość" dostaje własne, prywatne konto
+    // (osobny user_id), zaczyna z pustym dziennikiem i nie widzi cudzych wpisów.
+    // Piaskownica do testów; można ją później „awansować" na konto e-mail.
+    const { error } = await supabase.auth.signInAnonymously();
+    if (error) {
       setError(
-        "Nie udało się otworzyć konta gościa. Spróbuj ponownie za chwilę."
+        "Tryb gościa jest niedostępny. Załóż konto e-mailem lub zaloguj przez Google."
       );
       setGuestLoading(false);
       return;
-    }
-    // Gdy weryfikacja e-mail jest włączona, signUp nie zwraca sesji —
-    // próbujemy zalogować się od razu.
-    if (!signUp.data.session) {
-      const retry = await supabase.auth.signInWithPassword({
-        email: GUEST_EMAIL,
-        password: GUEST_PASSWORD,
-      });
-      if (retry.error) {
-        setError(
-          "Konto gościa wymaga potwierdzenia e-mail — wyłącz „Confirm email” w Supabase (Authentication → Sign In / Providers)."
-        );
-        setGuestLoading(false);
-        return;
-      }
-    }
-    // Świeżo założone wspólne konto — seedujemy raz przykładowymi wpisami.
-    // Idempotentne: gdyby seed odpalił się ponownie, sam się pominie.
-    try {
-      await seedGuestEntries();
-    } catch (e) {
-      // Nie blokujemy wejścia w razie błędu seeda.
-      console.error("seedGuestEntries failed:", e);
     }
     router.push(next);
     router.refresh();
