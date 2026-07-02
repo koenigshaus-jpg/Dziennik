@@ -24,6 +24,9 @@ interface EntryRecord {
   id: string;
   user_id: string;
   content_text: string | null;
+  // Marker środowiska (migracja 0006): 'prev' → embeddingi do osobnej tabeli,
+  // żeby wektory eksperymentu nie trafiały do produkcyjnej entry_embeddings.
+  source?: string | null;
 }
 
 interface WebhookPayload {
@@ -83,9 +86,13 @@ Deno.serve(async (req) => {
     const text = (rec.content_text ?? "").trim();
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
+    // Routing środowiska: wpisy eksperymentu (source='prev') mają osobną tabelę
+    // wektorów; produkcja (source='prod'/brak) pisze do entry_embeddings jak dotąd.
+    const table = rec.source === "prev" ? "entry_embeddings_prev" : "entry_embeddings";
+
     // Pusty wpis → usuń ewentualne stare embeddingi, nic nie licz.
     if (!text) {
-      await supabase.from("entry_embeddings").delete().eq("entry_id", rec.id);
+      await supabase.from(table).delete().eq("entry_id", rec.id);
       return new Response("empty", { status: 200 });
     }
 
@@ -105,12 +112,12 @@ Deno.serve(async (req) => {
 
     // Upsert nowych/zmienionych chunków + sprzątanie nadmiarowych (gdy wpis się skrócił).
     const { error: upErr } = await supabase
-      .from("entry_embeddings")
+      .from(table)
       .upsert(rows, { onConflict: "entry_id,chunk_idx" });
     if (upErr) throw upErr;
 
     const { error: delErr } = await supabase
-      .from("entry_embeddings")
+      .from(table)
       .delete()
       .eq("entry_id", rec.id)
       .gte("chunk_idx", chunks.length);

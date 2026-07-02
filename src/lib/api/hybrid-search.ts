@@ -42,7 +42,9 @@ export async function hybridSearchEntries(
   const embedding = await embedText(query); // null gdy pusty query
 
   const supabase = getSupabaseAdmin();
-  const { data, error } = await supabase.rpc("search_entries_hybrid", {
+  // Gałąź eksperymentu (PREV): wektory z osobnej tabeli entry_embeddings_prev
+  // przez bliźniaczy RPC, żeby nie mieszać z produkcyjną entry_embeddings.
+  const { data, error } = await supabase.rpc("search_entries_hybrid_prev", {
     filter_user_id: userId,
     query_embedding: embedding,
     query_text: query ?? "",
