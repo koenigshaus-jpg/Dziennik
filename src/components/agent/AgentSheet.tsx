@@ -444,7 +444,7 @@ function AgentChatInstance({
             placeholder="Napisz wiadomość…"
             rows={1}
             disabled={isStreaming}
-            className="flex-1 resize-none bg-foreground/5 rounded-2xl border-0 outline-none focus:ring-0 text-sm leading-6 py-2 px-3 placeholder:text-muted/70"
+            className="flex-1 resize-none bg-foreground/5 rounded-3xl border-0 outline-none focus:ring-0 text-sm leading-6 py-2 px-4 placeholder:text-muted/70"
           />
           <Button
             type="button"
