@@ -102,8 +102,24 @@ export function getProductSku(p: WooProduct): string | null {
 /**
  * Mapa SKU → Stripe price ID (meta `stripe_price_id` na produkcie WC, zapisywana
  * przez scripts/seed-stripe.ts). Server-only. Pusta, gdy sklep niedostępny.
+ *
+ * Override: jeśli ustawiona jest zmienna `STRIPE_PRICE_MAP` (JSON `{sku: priceId}`),
+ * używamy jej ZAMIAST WooCommerce. Wykorzystywane na eksperymencie (Preview) do
+ * podania testowych ID cen Stripe bez ruszania współdzielonego meta `stripe_price_id`
+ * w WooCommerce (które trzyma ceny LIVE produkcji). W produkcji ta zmienna nie
+ * istnieje → zachowanie bez zmian.
  */
 export async function getStripePriceMap(): Promise<Map<string, string>> {
+  const override = process.env.STRIPE_PRICE_MAP;
+  if (override) {
+    try {
+      const obj = JSON.parse(override) as Record<string, string>;
+      return new Map(Object.entries(obj).filter(([, v]) => typeof v === "string" && v));
+    } catch {
+      // Zły JSON → nie wysadzaj checkoutu, spadnij do WooCommerce.
+    }
+  }
+
   const map = new Map<string, string>();
   if (!isWooConfigured()) return map;
   let products: WooProduct[];
