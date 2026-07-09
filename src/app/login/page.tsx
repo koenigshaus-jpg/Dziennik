@@ -6,6 +6,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getSupabaseClient } from "@/lib/supabase/client";
 
+// Wspólne konto gościa EKSPERYMENTU (osobne od produkcyjnego, by nie mieszać
+// danych prod/prev). Wszyscy goście eksperymentu dzielą to jedno konto → wspólne
+// zakupy (entitlements) i wspólne wpisy. Świadoma decyzja: trwałość zakupów po
+// wylogowaniu ważniejsza niż izolacja per tester. Env nadpisuje domyślne.
+const GUEST_EMAIL =
+  process.env.NEXT_PUBLIC_GUEST_EMAIL || "gosc-eksperyment@dziennik.local";
+const GUEST_PASSWORD =
+  process.env.NEXT_PUBLIC_GUEST_PASSWORD || "dziennik-gosc-eksperyment";
+
 type EmailMode = "signin" | "signup";
 
 function LoginForm() {
@@ -44,16 +53,41 @@ function LoginForm() {
     setInfo(null);
     const supabase = getSupabaseClient();
 
-    // Izolowana sesja anonimowa — każdy „gość" dostaje własne, prywatne konto
-    // (osobny user_id), zaczyna z pustym dziennikiem i nie widzi cudzych wpisów.
-    // Piaskownica do testów; można ją później „awansować" na konto e-mail.
-    const { error } = await supabase.auth.signInAnonymously();
-    if (error) {
-      setError(
-        "Tryb gościa jest niedostępny. Załóż konto e-mailem lub zaloguj przez Google."
-      );
+    // Wspólne konto gościa: logujemy na istniejące. Ten sam user_id dla wszystkich
+    // gości → zakupy i wpisy przetrwają wylogowanie i są współdzielone.
+    const { error } = await supabase.auth.signInWithPassword({
+      email: GUEST_EMAIL,
+      password: GUEST_PASSWORD,
+    });
+    if (!error) {
+      router.push(next);
+      router.refresh();
+      return;
+    }
+
+    // Pierwsze wejście: konto gościa jeszcze nie istnieje → zakładamy je raz.
+    const signUp = await supabase.auth.signUp({
+      email: GUEST_EMAIL,
+      password: GUEST_PASSWORD,
+    });
+    if (signUp.error) {
+      setError("Nie udało się otworzyć konta gościa. Spróbuj ponownie za chwilę.");
       setGuestLoading(false);
       return;
+    }
+    // Gdy weryfikacja e-mail jest włączona, signUp nie zwraca sesji — logujemy od razu.
+    if (!signUp.data.session) {
+      const retry = await supabase.auth.signInWithPassword({
+        email: GUEST_EMAIL,
+        password: GUEST_PASSWORD,
+      });
+      if (retry.error) {
+        setError(
+          "Konto gościa wymaga potwierdzenia e-mail — wyłącz „Confirm email” w Supabase (Authentication → Providers)."
+        );
+        setGuestLoading(false);
+        return;
+      }
     }
     router.push(next);
     router.refresh();
