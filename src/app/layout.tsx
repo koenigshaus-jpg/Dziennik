@@ -7,6 +7,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { AgentSheetProvider } from "@/components/agent/AgentSheetProvider";
 import { GalleryDialogProvider } from "@/components/media/GalleryDialogProvider";
 import { SessionGuard } from "@/components/SessionGuard";
+import { PostHogProvider } from "@/components/analytics/PostHogProvider";
 
 const inter = Inter({
   subsets: ["latin", "latin-ext"],
@@ -55,13 +56,15 @@ export default function RootLayout({
       </head>
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <ThemeProvider>
-          <SessionGuard />
-          <AgentSheetProvider>
-            <GalleryDialogProvider>
-              {children}
-              <Toaster position="top-center" richColors />
-            </GalleryDialogProvider>
-          </AgentSheetProvider>
+          <PostHogProvider>
+            <SessionGuard />
+            <AgentSheetProvider>
+              <GalleryDialogProvider>
+                {children}
+                <Toaster position="top-center" richColors />
+              </GalleryDialogProvider>
+            </AgentSheetProvider>
+          </PostHogProvider>
         </ThemeProvider>
       </body>
     </html>
