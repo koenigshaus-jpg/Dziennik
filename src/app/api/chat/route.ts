@@ -105,8 +105,15 @@ export async function POST(req: Request) {
   const persona = await resolvePersona(personaKey);
 
   // Retrieval: hybrydowe wyszukiwanie wpisów pod ostatnie pytanie użytkownika.
+  // Nieobowiązkowe — gdy padnie (np. brak SUPABASE_SECRET_KEY, błąd RPC), czat
+  // odpowiada dalej bez kontekstu wpisów zamiast wywalać całą rozmowę.
   const query = lastUserText(body.messages);
-  const retrieved = await hybridSearchEntries(user.id, query, { day: body.day });
+  let retrieved: Awaited<ReturnType<typeof hybridSearchEntries>> = [];
+  try {
+    retrieved = await hybridSearchEntries(user.id, query, { day: body.day });
+  } catch (e) {
+    console.error("/api/chat retrieval failed (kontynuuję bez kontekstu):", e);
+  }
 
   console.log(
     `[/api/chat] day=${body.day} persona=${body.personaKey} ` +
