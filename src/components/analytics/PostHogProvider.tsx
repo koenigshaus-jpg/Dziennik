@@ -19,15 +19,16 @@ import { PostHogProvider as PHProvider, usePostHog } from "posthog-js/react";
 import { getSupabaseClient } from "@/lib/supabase/client";
 
 const POSTHOG_KEY = process.env.NEXT_PUBLIC_POSTHOG_KEY;
-const POSTHOG_HOST =
-  process.env.NEXT_PUBLIC_POSTHOG_HOST || "https://eu.i.posthog.com";
 
 export function PostHogProvider({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     if (!POSTHOG_KEY || posthog.__loaded) return;
 
     posthog.init(POSTHOG_KEY, {
-      api_host: POSTHOG_HOST,
+      // Reverse proxy przez własną domenę (rewrites w next.config) — omija
+      // adblockery. ui_host = prawdziwy host PostHoga dla linków „Otwórz w PostHog".
+      api_host: "/ingest",
+      ui_host: "https://eu.posthog.com",
       // Profile osób tylko dla zalogowanych → anonimowy ruch nie tworzy
       // person profiles (taniej, czyściej). Identyfikacja niżej w Identify.
       person_profiles: "identified_only",
@@ -50,6 +51,12 @@ export function PostHogProvider({ children }: { children: React.ReactNode }) {
       // (Treść wyświetlanych wpisów NIE jest maskowana — patrz nagłówek pliku.)
       session_recording: {
         maskAllInputs: true,
+      },
+
+      // Znacznik środowiska na starcie — każde zdarzenie dostaje app_env,
+      // więc dane eksperymentu łatwo odfiltrować w dashboardach PostHoga.
+      loaded: (ph) => {
+        ph.register({ app_env: "eksperyment" });
       },
     });
   }, []);

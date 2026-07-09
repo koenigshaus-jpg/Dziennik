@@ -25,6 +25,7 @@ const PUBLIC_PATHS = [
   "/api/mcp",                                    // MCP HTTP transport (own withMcpAuth)
   "/api/stripe/webhook",                         // webhook Stripe — własna autoryzacja (podpis)
   "/api/woo/webhook",                            // webhook WooCommerce — własna autoryzacja (podpis HMAC)
+  "/ingest",                                     // reverse proxy PostHog (rewrites w next.config) — nie za auth wall
   // /oauth/authorize zostaje POD loginem — wymaga sesji Supabase do consent
 ];
 

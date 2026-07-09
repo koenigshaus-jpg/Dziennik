@@ -12,6 +12,25 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  // Reverse proxy PostHoga przez własną domenę (region EU). Ruch analityki i
+  // nagrań idzie przez `/ingest`, a nie przez `*.i.posthog.com` — dzięki temu
+  // adblockery/uBlock nie ucinają zdarzeń, pageview'ów ani session replay.
+  // Klient wskazuje `api_host: "/ingest"` (patrz PostHogProvider).
+  skipTrailingSlashRedirect: true,
+  async rewrites() {
+    return [
+      // Statyczne bundle posthog-js (array.js, recorder.js, surveys…).
+      {
+        source: "/ingest/static/:path*",
+        destination: "https://eu-assets.i.posthog.com/static/:path*",
+      },
+      // Zdarzenia, flagi (`/flags`, `/decide`), nagrania, itd.
+      {
+        source: "/ingest/:path*",
+        destination: "https://eu.i.posthog.com/:path*",
+      },
+    ];
+  },
   async headers() {
     return [
       {
