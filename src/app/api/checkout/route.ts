@@ -50,7 +50,9 @@ export async function POST(req: Request) {
       line_items: [{ price: priceId, quantity: 1 }],
       // Powiązanie z użytkownikiem — webhook czyta to z subskrypcji.
       client_reference_id: user.id,
-      customer_email: user.email ?? undefined,
+      // `||` a nie `??`: gość anonimowy ma email = "" (pusty string, nie null);
+      // pusty → undefined, żeby Stripe sam zebrał adres przy płatności.
+      customer_email: user.email || undefined,
       subscription_data: { metadata: { user_id: user.id, sku } },
       metadata: { user_id: user.id, sku },
       allow_promotion_codes: true,
