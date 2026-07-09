@@ -54,7 +54,7 @@ flowchart TB
 |---|---|---|
 | Wdrożenie Vercel | production | preview |
 | Ścieżka zapisu wpisu | app → Supabase (bezpośrednio) | app → Strapi (NAS) → most → Supabase |
-| Logowanie „gość" | wspólne konto e-mail (współdzielone dane) | `signInAnonymously()` (izolowana piaskownica per tester) |
+| Logowanie „gość" | wspólne konto e-mail (współdzielone dane) | wspólne konto **osobne** (`gosc-eksperyment@`) — współdzielone dane i zakupy |
 | Model użytkowników | jednoużytkownikowy w intencji | wielu użytkowników, gating własności |
 | `entries.source` | `'prod'` (domyślnie) | `'prev'` (ustawia most) |
 | Tabela embeddingów | `entry_embeddings` | `entry_embeddings_prev` |
@@ -114,7 +114,7 @@ Baza była już RLS-owana per `user_id`; eksperyment domyka to na warstwie zapis
 - **Stemplowanie właściciela:** route czyta zalogowanego użytkownika z cookies (`createSupabaseRouteHandlerClient`) i przekazuje `userId` do Strapi. Klient **nie może** podać cudzego `userId`.
 - **Gating własności (serwerowo):** `PUT`/`DELETE` sprawdzają, czy wpis jest widoczny dla użytkownika przez RLS (SELECT po `id`) — brak → **403**. Blokuje edycję, kasowanie i „przejęcie" cudzego wpisu po zgadniętym `entryId`.
 - **Kolizja `entryId`:** unikalny `entryId` w Strapi zapobiega nadpisaniu cudzego wpisu przy tworzeniu.
-- **Gość = sesja anonimowa:** [`src/app/login/page.tsx`](src/app/login/page.tsx) — przycisk „Wejdź jako gość" woła `signInAnonymously()`; każdy tester dostaje własne, puste, izolowane konto (a nie współdzielone konto jak na produkcji). E-mail/hasło i Google działają jak dotąd.
+- **Gość = wspólne konto (osobne od produkcji):** [`src/app/login/page.tsx`](src/app/login/page.tsx) — przycisk „Wejdź jako gość" loguje na jedno wspólne konto eksperymentu (`gosc-eksperyment@dziennik.local`, zakładane raz przy 1. wejściu), **osobne** od produkcyjnego `gosc@`, by nie mieszać danych prod/prev. E-mail/hasło i Google działają jak dotąd. **Świadoma zmiana** (2026-07-09): wcześniej `signInAnonymously()` dawał izolację per tester, ale zakupy gościa (entitlements per `user_id`) ginęły po wylogowaniu — wspólne konto daje trwałe, współdzielone zakupy kosztem izolacji wpisów między testerami.
 
 ---
 

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Personal single-user journal PWA ("Dziennik"). Polish UI. Mobile-first with a desktop split-view (macOS Notes-style). Built with Next.js 16 (App Router), React 19, TypeScript, Tailwind 4, Tiptap, shadcn-style UI primitives, Drizzle ORM. See `PRD.md` for product goals.
 
-> 🧪 **Gałąź `eksperyment`** — na tej gałęzi obowiązują odstępstwa od poniższego opisu (produkcyjnego): wpisy zapisują się przez **Strapi na NAS** (`/api/strapi/entries` → most → Supabase), logowanie „gość" jest **anonimowe** (`signInAnonymously`), zapis ma **gating własności** (PUT/DELETE cudzego → 403), a embeddingi eksperymentu idą do **`entry_embeddings_prev`** (kolumna `entries.source='prev'`, RPC `search_entries_hybrid_prev`). Pełny opis: **[architektura-eksperyment.md](architektura-eksperyment.md)**. **Produkcja (`main`) jest nietykalna — NIE mergować `eksperyment` do `main`** bez wyraźnej decyzji.
+> 🧪 **Gałąź `eksperyment`** — na tej gałęzi obowiązują odstępstwa od poniższego opisu (produkcyjnego): wpisy zapisują się przez **Strapi na NAS** (`/api/strapi/entries` → most → Supabase), logowanie „gość" idzie na **wspólne konto eksperymentu** (`gosc-eksperyment@`, osobne od produkcyjnego — trwałe/współdzielone zakupy; wcześniej anonimowe), zapis ma **gating własności** (PUT/DELETE cudzego → 403), a embeddingi eksperymentu idą do **`entry_embeddings_prev`** (kolumna `entries.source='prev'`, RPC `search_entries_hybrid_prev`). Pełny opis: **[architektura-eksperyment.md](architektura-eksperyment.md)**. **Produkcja (`main`) jest nietykalna — NIE mergować `eksperyment` do `main`** bez wyraźnej decyzji.
 
 ## Commands
 
