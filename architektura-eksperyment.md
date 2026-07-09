@@ -59,6 +59,8 @@ flowchart TB
 | `entries.source` | `'prod'` (domyślnie) | `'prev'` (ustawia most) |
 | Tabela embeddingów | `entry_embeddings` | `entry_embeddings_prev` |
 | RPC wyszukiwania | `search_entries_hybrid` | `search_entries_hybrid_prev` |
+| Płatności Stripe | live (produkcyjne) | **tryb testowy** (`sk_test` + `STRIPE_PRICE_MAP`) |
+| Analityka PostHog | brak | włączona (nagrania, heatmapy, Web Analytics) |
 
 ---
 
@@ -138,6 +140,35 @@ App eksperymentu przeszukuje tabelę PREV — [`src/lib/api/hybrid-search.ts`](s
 
 ---
 
+## Płatności w trybie testowym (Stripe)
+
+Eksperyment testuje pełną ścieżkę zakupu person **bez ruszania produkcyjnego (live) billingu**. Ta sama baza `entitlements`, ale osobne środowisko Stripe i osobne ceny.
+
+- **Klucz testowy:** [`src/lib/stripe.ts`](src/lib/stripe.ts) czyta `STRIPE_SECRET_KEY`; na preview eksperymentu jest to `sk_test_…` (produkcja: `sk_live_…`). Klient Stripe jest **server-only** — nigdy do przeglądarki.
+- **Override cen:** [`getStripePriceMap()`](src/lib/woocommerce.ts) najpierw sprawdza env `STRIPE_PRICE_MAP` (JSON `{sku: priceId}`) i — jeśli jest — używa **testowych** `price_…` zamiast czytać `stripe_price_id` z WooCommerce. Dzięki temu preview korzysta z testowych Product/Price, a katalog WC (produkcyjny) zostaje nietknięty. Zły JSON → cichy fallback do WooCommerce (checkout się nie wywala).
+- **Checkout:** [`/api/checkout`](src/app/api/checkout/route.ts) tworzy `mode: subscription`; `client_reference_id`/metadata niosą `user_id` + `sku`. Gość ma email `""` → `|| undefined`, żeby Stripe sam zebrał adres (fix `51058e7`).
+- **Webhook:** `/api/stripe/webhook` (`STRIPE_WEBHOOK_SECRET`) po opłaceniu upsertuje do `entitlements`. Testowe zakupy trafiają do tej samej tabeli co produkcyjne — rozróżniane po tym, że powstały pod kontem `gosc-eksperyment@` / testowych userach.
+
+> **Świadoma decyzja:** produkcyjny live Stripe pozostaje nietknięty; eksperyment żyje w sandboxie testowym Stripe. WooCommerce nadal jest tylko katalogiem i edytorem promptów, nie billingiem.
+
+---
+
+## Analityka (PostHog) — tylko eksperyment
+
+PostHog jest wpięty **wyłącznie na gałęzi `eksperyment`** (produkcja `main` go nie ładuje). Inicjalizacja jest no-op bez `NEXT_PUBLIC_POSTHOG_KEY`, więc lokalnie i na produkcji po prostu się nie uruchamia. Zakres: autocapture, ręczne pageviews (App Router), nagrania sesji, heatmapy, Web Analytics + Web Vitals, error tracking.
+
+- **Provider:** [`src/components/analytics/PostHogProvider.tsx`](src/components/analytics/PostHogProvider.tsx) — init, ręczny `$pageview` przy każdej nawigacji, `Identify` wiążący zdarzenia z użytkownikiem Supabase po `user.id` (nie e-mailu). Każde zdarzenie dostaje `app_env: "eksperyment"` → dane eksperymentu łatwo odfiltrować w dashboardach.
+- **Reverse proxy przez `/ingest`:** rewrites w [`next.config.ts`](next.config.ts) przepuszczają ruch analityki przez własną domenę (region EU: `eu.i.posthog.com` + `eu-assets.i.posthog.com`) zamiast `*.i.posthog.com` — dzięki temu adblockery/uBlock nie ucinają zdarzeń, pageview'ów ani session replay. Klient wskazuje `api_host: "/ingest"`.
+- **Prywatność (świadomy wybór):** nagrania maskują pola formularzy (`maskAllInputs`), ale **NIE** maskują wyświetlanej treści wpisów. To dziennik — by ukryć też treść wpisów, ustaw `maskAllText: true` w `session_recording`.
+
+---
+
+## Odporność agenta (retrieval opcjonalny)
+
+Czat z Agentem korzysta z hybrydowego retrievalu po tabeli PREV, ale **nie zależy** od niego krytycznie. W [`/api/chat`](src/app/api/chat/route.ts) wywołanie `hybridSearchEntries` jest w `try/catch` — gdy padnie (np. brak `SUPABASE_SECRET_KEY`, błąd RPC), czat kontynuuje **bez** kontekstu z wyszukiwania zamiast się wywalić (fix `17000c9`). Serwerowy retrieval wymaga `SUPABASE_SECRET_KEY` (odczyt przez `service_role`).
+
+---
+
 ## Zmienne środowiskowe (dodatkowe wobec produkcji)
 
 Tylko **nazwy** — bez wartości. Sekrety trzymane w `.env.local` (app) i `.env` na NAS-ie (most).
@@ -147,9 +178,13 @@ Tylko **nazwy** — bez wartości. Sekrety trzymane w `.env.local` (app) i `.env
 | `STRAPI_URL` | app (server) | endpoint Strapi (publiczny HTTPS przez Tailscale Funnel) |
 | `STRAPI_API_TOKEN` | app (server) | token zapisu do Strapi (nigdy do przeglądarki) |
 | `SUPABASE_URL` | NAS / most | most → Supabase |
-| `SUPABASE_SECRET_KEY` | NAS / most | `service_role` mostu (omija RLS) |
+| `SUPABASE_SECRET_KEY` | NAS / most **+ app (server)** | `service_role`: most (omija RLS) oraz serwerowy retrieval agenta w `/api/chat` |
 | `SUPABASE_USER_ID` | NAS / most | fallback właściciela dla starych/ręcznych rekordów (multi-user bierze `userId` z wpisu) |
 | `TS_AUTHKEY` | NAS | rejestracja węzła Tailscale (Funnel) |
+| `NEXT_PUBLIC_POSTHOG_KEY` | app (klient) | klucz projektu PostHog; brak → analityka wyłączona (no-op) |
+| `STRIPE_SECRET_KEY` | app (server) | Stripe; na eksperymencie `sk_test_…` (produkcja: `sk_live_…`) |
+| `STRIPE_PRICE_MAP` | app (server) | JSON `{sku: priceId}` — override testowych cen Stripe (omija `stripe_price_id` z WooCommerce) |
+| `STRIPE_WEBHOOK_SECRET` | app (server) | weryfikacja podpisu webhooka `/api/stripe/webhook` |
 
 ---
 
