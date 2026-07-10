@@ -1,6 +1,6 @@
 # Architektura — eksperyment (branch `eksperyment`)
 
-Ten dokument opisuje **gałąź eksperymentalną** Dziennika. Bazowa architektura produkcyjna jest w [`architektura.md`](architektura.md) — tutaj opisujemy **tylko to, czym eksperyment się od niej różni**.
+Ten dokument opisuje **gałąź eksperymentalną** Dziennika. Najpierw wypunktowane są **różnice wobec produkcji** (`main`), a na końcu — w sekcji [Reszta architektury (niezmieniona)](#reszta-architektury-niezmieniona-wobec-produkcji) — rekapitulacja tego, co eksperyment dziedziczy z produkcji bez zmian, żeby dokument dawał **pełny obraz** bez skakania do [`architektura.md`](architektura.md).
 
 Dokument nie zawiera sekretów — wymienia jedynie **nazwy** zmiennych środowiskowych oraz opisowe (nie konkretne) adresy infrastruktury.
 
@@ -10,7 +10,7 @@ Dokument nie zawiera sekretów — wymienia jedynie **nazwy** zmiennych środowi
 
 Eksperyment dokłada trzy rzeczy do produkcyjnego Dziennika:
 
-1. **Wielu użytkowników** — realna izolacja per konto (nie „jednoużytkownikowy w intencji"), z egzekwowaniem własności wpisów po stronie serwera.
+1. **Egzekwowanie własności na zapisie** — produkcja **już** izoluje dane per konto przez RLS (odczyt). Eksperyment domyka to na *zapisie*: `user_id` stemplowany z sesji (nigdy z ciała żądania), a `PUT`/`DELETE` cudzego wpisu → **403**. To nie „wprowadzenie multi-user" (ten był), tylko twarde egzekwowanie własności, gdy wpisy realnych testerów przechodzą przez Strapi.
 2. **Strapi jako źródło prawdy wpisów** — wpisy powstają w headless CMS **Strapi na NAS-ie (QNAP)**, a stamtąd są mostowane do Supabase (wektoryzacja i wyszukiwanie bez zmian).
 3. **Izolacja danych eksperymentu od produkcji** — ta sama baza Supabase, ale wpisy eksperymentu są oznaczane `source='prev'`, a ich embeddingi trafiają do osobnej tabeli.
 
@@ -55,12 +55,14 @@ flowchart TB
 | Wdrożenie Vercel | production | preview |
 | Ścieżka zapisu wpisu | app → Supabase (bezpośrednio) | app → Strapi (NAS) → most → Supabase |
 | Logowanie „gość" | wspólne konto e-mail (współdzielone dane) | wspólne konto **osobne** (`gosc-eksperyment@`) — współdzielone dane i zakupy |
-| Model użytkowników | jednoużytkownikowy w intencji | wielu użytkowników, gating własności |
+| Izolacja danych | RLS per `user_id` (odczyt) — było | RLS + **serwerowy gating zapisu** (403 na cudze) |
 | `entries.source` | `'prod'` (domyślnie) | `'prev'` (ustawia most) |
 | Tabela embeddingów | `entry_embeddings` | `entry_embeddings_prev` |
 | RPC wyszukiwania | `search_entries_hybrid` | `search_entries_hybrid_prev` |
-| Płatności Stripe | live (produkcyjne) | **tryb testowy** (`sk_test` + `STRIPE_PRICE_MAP`) |
+| Stripe | tryb testowy, ceny z WooCommerce | tryb testowy, ceny z `STRIPE_PRICE_MAP` |
 | Analityka PostHog | brak | włączona (nagrania, heatmapy, Web Analytics) |
+
+> Billing Stripe **na obu** środowiskach działa w trybie testowym — integracja nie jest jeszcze uruchomiona na żywo. Różnica eksperymentu to wyłącznie źródło cen (override `STRIPE_PRICE_MAP`), nie „test vs live".
 
 ---
 
@@ -82,19 +84,22 @@ Wpisy eksperymentu powstają w **Strapi 5** (TypeScript) uruchomionym w **Contai
 
 ## Ścieżka zapisu wpisu (eksperyment)
 
+Wpis najpierw ląduje w **Strapi** (źródło prawdy), a dopiero stamtąd most wgrywa go do Supabase. Wcześniejsze odbicie o Supabase to wyłącznie **odczyt tożsamości/własności** (kim jest zalogowany użytkownik) — nie zapis.
+
 ```mermaid
 sequenceDiagram
     participant UI as App (klient)
     participant R as /api/strapi/entries (Next, server)
-    participant SUP as Supabase (RLS)
-    participant ST as Strapi (NAS)
+    participant ST as Strapi (NAS) — źródło prawdy
     participant BR as Most (lifecycle)
+    participant SUP as Supabase (RLS)
     participant TR as trigger + embed-entry
 
     UI->>R: POST/PUT/DELETE (bez userId)
-    R->>SUP: kim jestem? (getUser z cookies)
+    R->>SUP: (odczyt) kim jestem? getUser z cookies
     Note over R,SUP: PUT/DELETE: SELECT wpisu po RLS<br/>→ brak = 403 (kontrola własności)
     R->>ST: zapis z userId z SESJI (nie z ciała)
+    Note over ST: Strapi zapisuje wpis (PREV)
     ST->>BR: afterCreate/Update/Delete
     BR->>SUP: upsert entries (user_id, source='prev') + tagi
     SUP->>TR: trigger na content_text
@@ -140,16 +145,15 @@ App eksperymentu przeszukuje tabelę PREV — [`src/lib/api/hybrid-search.ts`](s
 
 ---
 
-## Płatności w trybie testowym (Stripe)
+## Płatności — override cen (Stripe)
 
-Eksperyment testuje pełną ścieżkę zakupu person **bez ruszania produkcyjnego (live) billingu**. Ta sama baza `entitlements`, ale osobne środowisko Stripe i osobne ceny.
+Billing person (Stripe, subskrypcja roczna; źródło prawdy o uprawnieniach to tabela `entitlements`) działa jak w produkcji. **Oba środowiska korzystają ze Stripe w trybie testowym** — integracja nie jest jeszcze uruchomiona na żywo. Jedyna różnica eksperymentu to **skąd brane są ceny**:
 
-- **Klucz testowy:** [`src/lib/stripe.ts`](src/lib/stripe.ts) czyta `STRIPE_SECRET_KEY`; na preview eksperymentu jest to `sk_test_…` (produkcja: `sk_live_…`). Klient Stripe jest **server-only** — nigdy do przeglądarki.
-- **Override cen:** [`getStripePriceMap()`](src/lib/woocommerce.ts) najpierw sprawdza env `STRIPE_PRICE_MAP` (JSON `{sku: priceId}`) i — jeśli jest — używa **testowych** `price_…` zamiast czytać `stripe_price_id` z WooCommerce. Dzięki temu preview korzysta z testowych Product/Price, a katalog WC (produkcyjny) zostaje nietknięty. Zły JSON → cichy fallback do WooCommerce (checkout się nie wywala).
+- **Override cen przez env:** [`getStripePriceMap()`](src/lib/woocommerce.ts) najpierw sprawdza `STRIPE_PRICE_MAP` (JSON `{sku: priceId}`); jeśli jest ustawiony, używa tych `price_…` zamiast czytać `stripe_price_id` z produktów WooCommerce. Eksperyment ma ten override ustawiony, produkcja czyta ceny z WC. Zły JSON → cichy fallback do WooCommerce (checkout się nie wywala).
 - **Checkout:** [`/api/checkout`](src/app/api/checkout/route.ts) tworzy `mode: subscription`; `client_reference_id`/metadata niosą `user_id` + `sku`. Gość ma email `""` → `|| undefined`, żeby Stripe sam zebrał adres (fix `51058e7`).
-- **Webhook:** `/api/stripe/webhook` (`STRIPE_WEBHOOK_SECRET`) po opłaceniu upsertuje do `entitlements`. Testowe zakupy trafiają do tej samej tabeli co produkcyjne — rozróżniane po tym, że powstały pod kontem `gosc-eksperyment@` / testowych userach.
+- **Webhook:** `/api/stripe/webhook` (`STRIPE_WEBHOOK_SECRET`) po opłaceniu upsertuje do `entitlements` — tej samej tabeli co produkcja.
 
-> **Świadoma decyzja:** produkcyjny live Stripe pozostaje nietknięty; eksperyment żyje w sandboxie testowym Stripe. WooCommerce nadal jest tylko katalogiem i edytorem promptów, nie billingiem.
+> WooCommerce pozostaje **katalogiem i edytorem promptów**, nie warstwą billingową — bez zmian wobec produkcji.
 
 ---
 
@@ -182,8 +186,8 @@ Tylko **nazwy** — bez wartości. Sekrety trzymane w `.env.local` (app) i `.env
 | `SUPABASE_USER_ID` | NAS / most | fallback właściciela dla starych/ręcznych rekordów (multi-user bierze `userId` z wpisu) |
 | `TS_AUTHKEY` | NAS | rejestracja węzła Tailscale (Funnel) |
 | `NEXT_PUBLIC_POSTHOG_KEY` | app (klient) | klucz projektu PostHog; brak → analityka wyłączona (no-op) |
-| `STRIPE_SECRET_KEY` | app (server) | Stripe; na eksperymencie `sk_test_…` (produkcja: `sk_live_…`) |
-| `STRIPE_PRICE_MAP` | app (server) | JSON `{sku: priceId}` — override testowych cen Stripe (omija `stripe_price_id` z WooCommerce) |
+| `STRIPE_SECRET_KEY` | app (server) | Stripe (server-only); oba środowiska w trybie testowym (`sk_test_…`) |
+| `STRIPE_PRICE_MAP` | app (server) | JSON `{sku: priceId}` — override cen Stripe na eksperymencie (omija `stripe_price_id` z WooCommerce) |
 | `STRIPE_WEBHOOK_SECRET` | app (server) | weryfikacja podpisu webhooka `/api/stripe/webhook` |
 
 ---
@@ -196,9 +200,62 @@ Tylko **nazwy** — bez wartości. Sekrety trzymane w `.env.local` (app) i `.env
 
 ---
 
-## Co jeszcze NIE zrobione (TODO eksperymentu)
+## Reszta architektury (niezmieniona wobec produkcji)
 
-- **Publiczny preview:** wyłączenie Vercel Deployment Protection („Require Log In") — krok w panelu Vercel, wymaga użytkownika.
-- **Prawdziwa wieloużytkowość mostu:** most jest per-user na zapisie, ale gdy testerzy anonimowi tworzą wpisy przez Strapi, powstają w nim rekordy „śmieciowe" — do sprzątania.
-- **Wyszukiwanie/agent na tabeli PREV:** wpięte (`search_entries_hybrid_prev`), ale nie przetestowane pod obciążeniem.
-- Ewentualna **pełna separacja** (osobny projekt Supabase dla PREV), jeśli lekki wariant okaże się niewystarczający.
+Poniższe warstwy eksperyment **dziedziczy z produkcji bez zmian** — działają identycznie na obu gałęziach. Gdzie eksperyment coś modyfikuje, jest to zaznaczone odnośnikiem do sekcji „różnic" wyżej. Pełny opis każdej z nich: [`architektura.md`](architektura.md).
+
+### Stack technologiczny
+
+Next.js 16 (App Router) + React 19 + TypeScript 5; Tailwind CSS 4 + prymitywy UI w stylu shadcn (Radix); edytor **Tiptap 3**; **Supabase** (Postgres + RLS + Storage + Edge Functions); **Vercel AI SDK** (`ai` + `@ai-sdk/openai` + `@ai-sdk/react`); Stripe; WooCommerce (headless); MCP przez `mcp-handler`; Zod 4; `lucide-react` + `sonner`.
+
+### Warstwa danych (Supabase)
+
+Aktywna warstwa CRUD to [`src/lib/db-supabase.ts`](src/lib/db-supabase.ts) (`createEntry`/`updateEntry`/`deleteEntry`/`getEntry`/`listEntries` + tagi). Klient przeglądarkowy: [`src/lib/supabase/client.ts`](src/lib/supabase/client.ts) (`@supabase/ssr`). Każde zapytanie RLS-owane per `user_id`. Reaktywność UI: `CustomEvent("entries-changed")` (+ `conversations-changed`, `entitlements-changed`) i refetch na `focus`. Tabele: `entries`, `tags`, `entry_tags`, `media`, `entry_embeddings`, `entitlements`. Migracje `0001`–`0005` w [`supabase/migrations/`](supabase/migrations/) (eksperyment dokłada `0006_prev_embeddings`).
+
+> **Δ eksperyment:** *zapis* wpisów idzie przez Strapi, nie wprost do Supabase — patrz [Ścieżka zapisu wpisu](#ścieżka-zapisu-wpisu-eksperyment). Odczyty, media i tagi bez zmian.
+
+### Agent AI
+
+Rozmowny asystent na Vercel AI SDK. Cała komunikacja z LLM przez interfejs `ChatProvider` ([`src/lib/agent/provider.ts`](src/lib/agent/provider.ts)) — UI i route'y nigdy nie importują SDK dostawcy wprost. 7 person ([`src/lib/agent/personas/`](src/lib/agent/personas/)), każda z `defaultModel` (`gpt-4o-mini`) i `deepModel` (`gpt-4o`). Kontekst dnia budowany klientem ([`entries-context.ts`](src/lib/agent/entries-context.ts)): `dayEntries` + lekki `entriesIndex`; model dociąga pełny wpis narzędziem `fetchEntry(id)`. Rozmowy w IndexedDB (store `conversations`), auto-tytuł przez [`/api/chat/title`](src/app/api/chat/title/route.ts). UI: `AgentSheet` (bottom-sheet), własny renderer Markdown.
+
+> **Δ eksperyment:** serwerowy retrieval kontekstu jest opcjonalny — patrz [Odporność agenta](#odporność-agenta-retrieval-opcjonalny).
+
+### Wyszukiwanie semantyczne (embeddings)
+
+Edge Function [`supabase/functions/embed-entry`](supabase/functions/embed-entry/) liczy embeddingi (OpenAI) i zapisuje do `entry_embeddings`; wyzwalana webhookiem z sekretem. Wyszukiwanie hybrydowe (FTS + wektory) przez RPC — logika w [`src/lib/api/embeddings.ts`](src/lib/api/embeddings.ts) i [`src/lib/api/hybrid-search.ts`](src/lib/api/hybrid-search.ts). Backfill: `scripts/embed-entries.mjs`.
+
+> **Δ eksperyment:** wektory PREV idą do osobnej tabeli i osobnego RPC — patrz [Izolacja embeddingów PREV](#izolacja-embeddingów-prev).
+
+### Sklep — headless WooCommerce
+
+Backend WordPress+WooCommerce na osobnym hostingu, frontend `/sklep` w tej apce. Klient [`src/lib/woocommerce.ts`](src/lib/woocommerce.ts) — **server-only**. Konsultanci = wirtualne produkty WC z polami `persona_*`. Prompty person edytowane w panelu WC, czytane runtime przez `getPersonaOverrides()` → `resolvePersona()` ([`persona-source.ts`](src/lib/agent/persona-source.ts)), wpięte w oba route'y czatu; persona z kodu to fallback. Odczyt cache 60 s. Seed: [`scripts/seed-shop.ts`](scripts/seed-shop.ts). **Bez zmian w eksperymencie** (poza źródłem cen Stripe — wyżej).
+
+### Uprawnienia (entitlements)
+
+Źródło prawdy: tabela `entitlements` (RLS: user czyta swoje, zapis tylko `service_role`). `sku` = `persona_key` | `all` (pakiet). Logika [`src/lib/agent/entitlements.ts`](src/lib/agent/entitlements.ts) (`computeUnlocked`, `FREE_PERSONA_KEYS`, `BUNDLE_SKU`). Gating dwuwarstwowy: klient (kosmetyczny, [`useEntitlements`](src/lib/agent/use-entitlements.ts) + [`PersonaMenuList`](src/components/agent/PersonaMenuList.tsx)) i **serwer** (prawdziwy): [`/api/chat`](src/app/api/chat/route.ts) → `402 persona_locked`, [`/api/v1/chat`](src/app/api/v1/chat/route.ts) po `user_id`. **Bez zmian w eksperymencie** (poza wspólnym kontem gościa, które daje trwałe zakupy — wyżej).
+
+### Media
+
+Zdjęcia → **Supabase Storage** (prywatny bucket `media`), nie do bazy. Upload: kompresja klientowa ([`clientImage.ts`](src/lib/clientImage.ts)) → `data:` URI → blob do Storage pod `${userId}/${entryId}/${mediaId}.${ext}` + wiersz `media`. Odczyt: `signMedia` → signed URL (TTL 1h). Render: miniatury nad treścią, własny lightbox. Audio: nagrywanie wyłączone, mikrofon = wyłącznie STT ([`/api/transcribe`](src/app/api/transcribe/route.ts), [`useStt.ts`](src/lib/useStt.ts)). **Bez zmian w eksperymencie.**
+
+### Publiczne API i serwer MCP
+
+Wersjonowane REST `/api/v1/*` (entries, tags, conversations, assistants, chat) + dokumentacja `/docs`, `openapi.json`, `llms.txt`. Serwer MCP [`/api/mcp`](src/app/api/mcp/route.ts) (`mcp-handler`) udostępnia dziennik jako narzędzia dla zewnętrznych asystentów. Klucze API: [`/api/internal/api-keys`](src/app/api/internal/api-keys/); OAuth: [`/oauth/authorize`](src/app/oauth/authorize/page.tsx). **Bez zmian w eksperymencie.**
+
+### Uwierzytelnianie
+
+Supabase Auth (e-mail/hasło + Google), izolacja przez RLS ([`/login`](src/app/login/page.tsx)). Legacy proxy-gate hasłem w [`src/proxy.ts`](src/proxy.ts) (`AUTH_ENABLED`) — wyłączony. Webhooki weryfikowane sekretami (`STRIPE_WEBHOOK_SECRET`, `WC_WEBHOOK_SECRET`).
+
+> **Δ eksperyment:** przycisk „gość" loguje na osobne wspólne konto — patrz [Multi-user](#multi-user).
+
+### UI i responsywność
+
+Breakpoint mobile/desktop to `lg` (≥1024 px); komponenty renderują oba warianty i przełączają przez `lg:hidden` / `hidden lg:flex` (bez rozgałęzień w JS). `AppShell` (wrapper, `wide` dla split-view), `TopNav` (tylko desktop), `BottomNav` (tylko mobile), `HistorySplit` (przeciągalny dwupanel). Wspólny edytor inline `EntryEditor` (+ `EntryForm` w `create` / `edit bare`). Design system przez komponent `Button`. **Bez zmian w eksperymencie.**
+
+### Routing
+
+`/` (nowy wpis), `/wpis/[id]`, `/historia` (filtry + selekcja, desktop → `HistorySplit`), `/galeria`, `/sklep` + `/sklep/[slug]`, `/historia-rozmow`, `/ustawienia/*`, `/docs/*`, `/login`, `/oauth/authorize`. Po utworzeniu wpisu: desktop → `/historia?id=`, mobile → `/wpis/`. **Bez zmian w eksperymencie** (dochodzi tylko route [`/api/strapi/entries`](src/app/api/strapi/entries/route.ts)).
+
+### Warstwy legacy
+
+Nieaktywne, nie budować na nich: IndexedDB dla wpisów ([`db-client.ts`](src/lib/db-client.ts)) — dziś tylko store `conversations`; backend Drizzle ([`src/lib/entries.ts`](src/lib/entries.ts), [`src/db/`](src/db/), [`storage.ts`](src/lib/storage.ts) = Vercel Blob/Turso). Aktywna ścieżka danych to zawsze **UI → [`db-supabase.ts`](src/lib/db-supabase.ts) → Supabase**.
